@@ -18,8 +18,8 @@ ymax      =  1.0
 Lc        = 1.0
 Tc        = 1.0
 # Numerics
-ncx       = 10
-ncy       = 10
+ncx       = 11
+ncy       = 11
 dx, dy    = (xmax-xmin)/ncx, (ymax-ymin)/ncy
 dt        = 1
 # Initialize coordinates
