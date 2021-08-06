@@ -10,4 +10,4 @@ The script [Mechanics_v8_SolVI.jl](./Mechanics_v8_SolVI.jl) produces first order
 
 The script [Mechanics_v10.jl](./Mechanics_v10.jl) allows to model multi-layer necking instabilities:
 
-![](/images/MLPS.png)
+![](/images/MLPS_Julia.png)
