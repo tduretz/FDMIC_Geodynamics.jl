@@ -6,8 +6,14 @@ The script [Mechanics_v8_SolVI.jl](./Mechanics_v8_SolVI.jl) produces first order
 
 ![](/images/SOLVI_Julia.png)
 
-# Power-law Stokes solver + advection
+# Power-law Stokes flow + advection
 
-The script [Mechanics_v10.jl](./Mechanics_v10.jl) allows to model multi-layer necking instabilities:
+The script [Mechanics_v10_MultiLayerExt.jl](./Mechanics_v10_MultiLayerExt.jl) allows to model multi-layer necking instabilities:
 
 ![](/images/MLPS_Julia.png)
+
+# Periodic simple shear Stokes flow + advection
+
+With [Mechanics_v10_PeriodicSimpleShear.jl](./Mechanics_v10_PeriodicSimpleShear.jl) one can model periodic shear deformation.
+
+![](/images/Periodic_Julia.png)
