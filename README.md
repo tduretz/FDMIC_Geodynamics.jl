@@ -12,7 +12,8 @@ The script [Mechanics_v10_MultiLayerExt.jl](./Mechanics_v10_MultiLayerExt.jl) al
 
 ![](/images/MLPS_Julia.png)
 
-![](/images/MultiLayerExtension.gif =250x)
+<!-- ![](/images/MultiLayerExtension.gif =250x) -->
+<img src="/images/MultiLayerExtension.gif" alt="drawing" width="200"/>
 
 # Periodic simple shear Stokes flow + advection
 
