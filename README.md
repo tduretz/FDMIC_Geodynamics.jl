@@ -4,7 +4,7 @@ Basic Finite difference / Marker-In-Cell code for teaching purposes.
 # Stokes solver
 The script [Mechanics_v8_SolVI.jl](./Mechanics_v8_SolVI.jl) produces first order L2 convergence of velocity and pressure using the SOLVI tests:
 
-![](/images/SOLVI_Julia.png)
+<!-- ![](/images/SOLVI_Julia.png) -->
 <center><img src="/images/SOLVI_Julia.png" alt="drawing" width="500"/></center>
 
 # Power-law Stokes flow + advection
