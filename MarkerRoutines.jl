@@ -1,16 +1,5 @@
 using Base.Threads
 
-mutable struct Markers
-    x         ::  Array{Float64,1}
-    y         ::  Array{Float64,1}
-    T         ::  Array{Float64,1}
-    phase     ::  Array{Float64,1}
-    cellx     ::  Array{Int64,1}#Vector{CartesianIndex{2}}
-    celly     ::  Array{Int64,1}
-    nmark     ::  Int64
-    nmark_max ::  Int64
-end
-
 @views function CopyMarkers!(p,ineigh)
     p.phase[p.nmark] = p.phase[ineigh]
     p.T[p.nmark]     = p.T[ineigh]

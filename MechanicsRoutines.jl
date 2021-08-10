@@ -1,43 +1,43 @@
 
 
 @views function StrainRate!( div::Matrix{Float64}, Eps::Tensor2D, Vx::Matrix{Float64}, Vy::Matrix{Float64}, dx::Float64, dy::Float64 )
-    div    .= diff(Vx[:,2:end-1],dims=1)./dx + diff(Vy[2:end-1,:],dims=2)./dy 
-    Eps.xx .= diff(Vx[:,2:end-1],dims=1)./dx .- 1.0/3.0 .* div
-    Eps.yy .= diff(Vy[2:end-1,:],dims=2)./dy .- 1.0/3.0 .* div
-    Eps.zz .= -(Eps.xx + Eps.yy)
-    Eps.xy .= 0.5.*( diff(Vx,dims=2)./dy .+ diff(Vy,dims=1)/dx ) 
-    Exy     = 0.25*(Eps.xy[1:end-1,1:end-1] .+ Eps.xy[1:end-1,2:end-0] .+ Eps.xy[2:end-0,1:end-1] .+ Eps.xy[2:end-0,2:end-0])
-    Eps.II .= sqrt.(0.5*(Eps.xx.^2 .+ Eps.xx.^2 .+ Eps.zz.^2) .+ Exy.^2)
+    @tturbo div    .= diff(Vx[:,2:end-1],dims=1)./dx + diff(Vy[2:end-1,:],dims=2)./dy 
+    @tturbo Eps.xx .= diff(Vx[:,2:end-1],dims=1)./dx .- 1.0/3.0 .* div
+    @tturbo Eps.yy .= diff(Vy[2:end-1,:],dims=2)./dy .- 1.0/3.0 .* div
+    @tturbo Eps.zz .= -(Eps.xx + Eps.yy)
+    @tturbo Eps.xy .= 0.5.*( diff(Vx,dims=2)./dy .+ diff(Vy,dims=1)/dx ) 
+    VerticesToCentroids!( Eps.xy_c, Eps.xy )
+    @tturbo Eps.II .= sqrt.(0.5*(Eps.xx.^2 .+ Eps.xx.^2 .+ Eps.zz.^2) .+ Eps.xy_c.^2)
 end
 
 ########
 
 @views function Stress!( Tau::Tensor2D, Eps::Tensor2D, etac::Matrix{Float64}, etav::Matrix{Float64})
-    Tau.xx .= 2.0.*etac.*Eps.xx 
-    Tau.yy .= 2.0.*etac.*Eps.yy
-    Tau.zz .= 2.0.*etac.*Eps.zz  
-    Tau.xy .= 2.0.*etav.*Eps.xy 
-    Txy     = 0.25*(Tau.xy[1:end-1,1:end-1] .+ Tau.xy[1:end-1,2:end-0] .+ Tau.xy[2:end-0,1:end-1] .+ Tau.xy[2:end-0,2:end-0])
-    Tau.II .= sqrt.(0.5*(Tau.xx.^2 .+ Tau.xx.^2 .+ Tau.zz.^2) .+ Txy.^2)
+    @tturbo Tau.xx .= 2.0.*etac.*Eps.xx 
+    @tturbo Tau.yy .= 2.0.*etac.*Eps.yy
+    @tturbo Tau.zz .= 2.0.*etac.*Eps.zz  
+    @tturbo Tau.xy .= 2.0.*etav.*Eps.xy 
+    VerticesToCentroids!( Tau.xy_c, Tau.xy )
+    @tturbo Tau.II .= sqrt.(0.5*(Tau.xx.^2 .+ Tau.xx.^2 .+ Tau.zz.^2) .+ Tau.xy_c.^2)
 end
 
 ########
 
 @views function Residuals!( Fx::Matrix{Float64}, Fy::Matrix{Float64}, Fp::Matrix{Float64}, Tau::Tensor2D, Pc::Matrix{Float64}, div::Matrix{Float64}, BC::BoundaryConditions, ncx::Int64, ncy::Int64, dx::Float64, dy::Float64)
-    Fx .= 0.0
-    Fy .= 0.0
-    Fp .= 0.0
+    @tturbo Fx .= 0.0
+    @tturbo Fy .= 0.0
+    @tturbo Fp .= 0.0
     if BC.periodix==0
         Fx[2:end-1,:] .= ( diff(Tau.xx .- Pc ,dims=1)./dx .+ diff(Tau.xy[2:end-1,:],dims=2)/dy )
     else
         Sxx_ex             = zeros(ncx+1,ncy)
-        Sxx_ex[2:end-0,:] .= -Pc .+ Tau.xx
+        @tturbo Sxx_ex[2:end-0,:] .= -Pc .+ Tau.xx
         Sxx_ex[      1,:] .= -Pc[end,:] .+ Tau.xx[end,:]
         #Sxx_ex[    end,:] .= -Pc[  1,:] .+ Tau.xx[  1,:] # Do not assemble last column
         Fx .= ( diff(Sxx_ex ,dims=1)./dx .+ diff(Tau.xy[1:end-1,:],dims=2)/dy )
     end
     Fy[:,2:end-1] .= ( diff(Tau.yy .- Pc ,dims=2)./dy .+ diff(Tau.xy[:,2:end-1],dims=1)/dx )
-    Fp            .= -div
+    @tturbo Fp            .= -div
     # # For periodic
     # if BC.periodix==1
     #     Fx = Fx[1:end-1,:]
@@ -128,17 +128,17 @@ end
     end
 
     # Finite difference coefficients
-    cVxC  = -(-1.0.*etaN./dy - 1.0.*etaS./dy)./dy - (-4/3*etaE./dx - 4/3*etaW./dx)./dx
-    cVxW  = -4/3*etaW./dx.^2
-    cVxE  = -4/3*etaE./dx.^2
-    cVxS  = -1.0*etaS./dy.^2
-    cVxN  = -1.0*etaN./dy.^2
-    cVySW = -1.0*etaS./(dx.*dy) + 2/3*etaW./(dx.*dy)
-    cVySE = -2/3*etaE./(dx.*dy) + 1.0*etaS./(dx.*dy)
-    cVyNW = 1.0*etaN./(dx.*dy) - 2/3*etaW./(dx.*dy)
-    cVyNE = 2/3*etaE./(dx.*dy) - 1.0*etaN./(dx.*dy)
-    cPW   = -1.0/dx .*  ones(Float64, nxvx, ncy)
-    cPE   =  1.0/dx .*  ones(Float64, nxvx, ncy)
+    @tturbo cVxC  = -(-1.0.*etaN./dy - 1.0.*etaS./dy)./dy - (-4/3*etaE./dx - 4/3*etaW./dx)./dx
+    @tturbo cVxW  = -4/3*etaW./dx.^2
+    @tturbo cVxE  = -4/3*etaE./dx.^2
+    @tturbo cVxS  = -1.0*etaS./dy.^2
+    @tturbo cVxN  = -1.0*etaN./dy.^2
+    @tturbo cVySW = -1.0*etaS./(dx.*dy) + 2/3*etaW./(dx.*dy)
+    @tturbo cVySE = -2/3*etaE./(dx.*dy) + 1.0*etaS./(dx.*dy)
+    @tturbo cVyNW = 1.0*etaN./(dx.*dy) - 2/3*etaW./(dx.*dy)
+    @tturbo cVyNE = 2/3*etaE./(dx.*dy) - 1.0*etaN./(dx.*dy)
+    @tturbo cPW   = -1.0/dx .*  ones(Float64, nxvx, ncy)
+    @tturbo cPE   =  1.0/dx .*  ones(Float64, nxvx, ncy)
 
     if BC.Vx.type_S==11
         cVxC[:,  1] .-= cVxS[:,  1]
@@ -206,17 +206,17 @@ end
     etaW      = zeros(size(NumVy)); etaW[1:end-0,:] = etav[1:end-1,:] 
     etaE      = zeros(size(NumVy)); etaE[1:end-0,:] = etav[2:end-0,:]
     # Finite difference coefficients
-    cVyC  = -(-4/3*etaN./dy - 4/3*etaS./dy)./dy - (-1.0*etaE./dx - 1.0*etaW./dx)./dx
-    cVyW  = -1.0*etaW./dx.^2
-    cVyE  = -1.0*etaE./dx.^2
-    cVyS  = -4/3*etaS./dy.^2
-    cVyN  = -4/3*etaN./dy.^2
-    cVxSW = 2/3*etaS./(dx.*dy) - 1.0*etaW./(dx.*dy)
-    cVxSE = 1.0*etaE./(dx.*dy) - 2/3*etaS./(dx.*dy)
-    cVxNW = -2/3*etaN./(dx.*dy) + 1.0*etaW./(dx.*dy)
-    cVxNE = -1.0*etaE./(dx.*dy) + 2/3*etaN./(dx.*dy)
-    cPS   = -1.0/dy .* ones(size(NumVy)); cPS[:,  1] .= 0.0;  cPS[:,end] .= 0.0
-    cPN   =  1.0/dy .* ones(size(NumVy)); cPN[:,  1] .= 0.0;  cPN[:,end] .= 0.0
+    @tturbo cVyC  = -(-4/3*etaN./dy - 4/3*etaS./dy)./dy - (-1.0*etaE./dx - 1.0*etaW./dx)./dx
+    @tturbo cVyW  = -1.0*etaW./dx.^2
+    @tturbo cVyE  = -1.0*etaE./dx.^2
+    @tturbo cVyS  = -4/3*etaS./dy.^2
+    @tturbo cVyN  = -4/3*etaN./dy.^2
+    @tturbo cVxSW = 2/3*etaS./(dx.*dy) - 1.0*etaW./(dx.*dy)
+    @tturbo cVxSE = 1.0*etaE./(dx.*dy) - 2/3*etaS./(dx.*dy)
+    @tturbo cVxNW = -2/3*etaN./(dx.*dy) + 1.0*etaW./(dx.*dy)
+    @tturbo cVxNE = -1.0*etaE./(dx.*dy) + 2/3*etaN./(dx.*dy)
+    @tturbo cPS   = -1.0/dy .* ones(size(NumVy)); cPS[:,  1] .= 0.0;  cPS[:,end] .= 0.0
+    @tturbo cPN   =  1.0/dy .* ones(size(NumVy)); cPN[:,  1] .= 0.0;  cPN[:,end] .= 0.0
 
     if BC.periodix==0
         if BC.Vy.type_W==11
@@ -423,10 +423,10 @@ end
     # Decoupled solve
     ndofu = size(Kup,1)
     ndofp = size(Kup,2)
-    coef  = gamma*ones(length(etac))#.*etac[:]
-    Kppi  = spdiagm(coef)
-    Kuusc = Kuu - Kup*(Kppi*Kpu) # OK
-    PC    =  0.5*(Kuusc + Kuusc') 
+    @tturbo coef  = gamma*ones(length(etac))#.*etac[:]
+    @tturbo Kppi  = spdiagm(coef)
+    @tturbo Kuusc = Kuu - Kup*(Kppi*Kpu) # OK
+    @tturbo PC    =  0.5*(Kuusc + Kuusc') 
     t = @elapsed Kf    = cholesky(Hermitian(PC),check = false)
     @printf("Cholesky took = %02.2e s\n", t)
     u     = zeros(ndofu, 1)
@@ -436,15 +436,15 @@ end
     rp    = zeros(ndofp, 1)
     # Iterations
     for rit=1:10
-        ru   .= fu - Kuu*u - Kup*p;
-        rp   .= fp - Kpu*u;
+        @tturbo ru   .= fu - Kuu*u - Kup*p;
+        @tturbo rp   .= fp - Kpu*u;
         @printf("  --> Powell-Hestenes Iteration %02d\n  Momentum res.   = %2.2e\n  Continuity res. = %2.2e\n", rit, norm(ru)/sqrt(length(ru)), norm(rp)/sqrt(length(rp)))
         if norm(ru)/(length(ru)) < 1e-10 && norm(rp)/(length(ru)) < 1e-10
             break
         end
-        fusc .=  fu  - Kup*(Kppi*fp + p)
-        u    .= Kf\fusc
-        p   .+= Kppi*(fp - Kpu*u)
+        @tturbo fusc .=  fu  - Kup*(Kppi*fp + p)
+        @tturbo u    .= Kf\fusc
+        @tturbo p   .+= Kppi*(fp - Kpu*u)
     end
     Vx[:,2:end-1] .+= u[NumVx]
     Vy[2:end-1,:] .+= u[NumVy]

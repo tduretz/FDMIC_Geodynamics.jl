@@ -34,10 +34,10 @@ function Rheology!( etac, etav, Eps, eta0, n, phase_perc, nphase, BC, ncx, ncy )
     # Compute effective viscosity for each phase
     etac .= 0.0
     for m=1:nphase
-        eta    = eta0[m] * Eps.II.^(1.0/n[m] - 1.0)
-        etac .+= phase_perc[m,:,:] .* eta
+        @tturbo eta    = eta0[m] * Eps.II.^(1.0/n[m] - 1.0)
+        @tturbo etac .+= phase_perc[m,:,:] .* eta
     end
-    @time  CentroidsToVertices!( etav, etac, ncx, ncy, BC )
+    @time CentroidsToVertices!( etav, etac, ncx, ncy, BC )
     println("min Eii: ", minimum(Eps.II), " --- max Eii: ", maximum(Eps.II))
     println("min eta: ", minimum(etac), " --- max eta: ", maximum(etac))
 end
@@ -78,7 +78,7 @@ end
     niter_nl      = 10    # max. number of non-linear iterations
     tol_nl        = 1e-3  # non-linear tolerance
     # Visualisation
-    show_figs     = 1     # activates visualisation...
+    show_figs     = 0     # activates visualisation...
     nout          = 10    # ... every nout
     experiment    = "MultiLayerExtension"
     # RK4 weights
@@ -142,8 +142,8 @@ end
     Vx        = zeros(Float64, ncx+1, ncy+2) # !!! GHOST ROWS
     Vy        = zeros(Float64, ncx+2, ncy+1) # !!! GHOST COLUMNS
     div       = zeros(Float64, ncx+0, ncy+0)
-    Tau       = Tensor2D( zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+1, ncy+1), zeros(Float64, ncx+0, ncy+0) ) 
-    Eps       = Tensor2D( zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+1, ncy+1), zeros(Float64, ncx+0, ncy+0) ) 
+    Tau       = Tensor2D( zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+1, ncy+1), zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+0, ncy+0) ) 
+    Eps       = Tensor2D( zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+1, ncy+1), zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+0, ncy+0) ) 
     if BC.periodix==0 
         Fx        = zeros(Float64, ncx+1, ncy+0)
     else
@@ -292,8 +292,10 @@ end
             display(Plots.plot( p4, dpi=200 ) ); Plots.frame(anim) 
         end
     end
-    Plots.gif(anim, string( path, experiment, ".gif" ), fps = 15)
+    if show_figs==1 Plots.gif(anim, string( path, experiment, ".gif" ), fps = 15) end
     return 
     end
 
+for it=1:2
    @time main()
+end

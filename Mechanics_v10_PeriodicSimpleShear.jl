@@ -132,8 +132,8 @@ end
     Vx        = zeros(Float64, ncx+1, ncy+2) # !!! GHOST ROWS
     Vy        = zeros(Float64, ncx+2, ncy+1) # !!! GHOST COLUMNS
     div       = zeros(Float64, ncx+0, ncy+0)
-    Tau       = Tensor2D( zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+1, ncy+1), zeros(Float64, ncx+0, ncy+0) ) 
-    Eps       = Tensor2D( zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+1, ncy+1), zeros(Float64, ncx+0, ncy+0) ) 
+    Tau       = Tensor2D( zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+1, ncy+1), zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+0, ncy+0) ) 
+    Eps       = Tensor2D( zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+1, ncy+1), zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+0, ncy+0) ) 
     if BC.periodix==0 
         Fx        = zeros(Float64, ncx+1, ncy+0)
     else
@@ -286,4 +286,4 @@ end
     return 
     end
 
-   @time main()
+   @time main() 

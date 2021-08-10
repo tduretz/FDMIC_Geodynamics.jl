@@ -82,8 +82,8 @@ end
     Vx        = zeros(Float64, ncx+1, ncy+2) # !!! GHOST ROWS
     Vy        = zeros(Float64, ncx+2, ncy+1) # !!! GHOST COLUMNS
     div       = zeros(Float64, ncx+0, ncy+0)
-    Tau       = Tensor2D( zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+1, ncy+1), zeros(Float64, ncx+0, ncy+0) ) 
-    Eps       = Tensor2D( zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+1, ncy+1), zeros(Float64, ncx+0, ncy+0) ) 
+    Tau       = Tensor2D( zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+1, ncy+1), zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+0, ncy+0) ) 
+    Eps       = Tensor2D( zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+1, ncy+1), zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+0, ncy+0) ) 
     if BC.periodix==0 
         Fx        = zeros(Float64, ncx+1, ncy+0)
     else
@@ -111,11 +111,11 @@ end
     xm[1:nmark0]     = vec(xmi)
     ym[1:nmark0]     = vec(ymi)
     phm[1:nmark0]    = zeros(Float64, size(xmi))
-    cellxm[1:nmark0] = zeros(Int64,   size(xmi)) #zeros(CartesianIndex{2}, size(xm))
+    cellxm[1:nmark0] = zeros(Int64,   size(xmi)) 
     cellym[1:nmark0] = zeros(Int64,   size(xmi))
-    p      = Markers( xm, ym, Tm, phm, cellxm, cellym, nmark0, nmark_max )
-    mpc         = zeros(Float64,(ncx  ,ncy  )) # markers per cell
-    mpc_th      = zeros(Float64,(nthreads(), ncx  ,ncy   )) # markers per cell
+    p                = Markers( xm, ym, Tm, phm, cellxm, cellym, nmark0, nmark_max )
+    mpc              = zeros(Float64,(ncx  ,ncy  ))              # markers per cell
+    mpc_th           = zeros(Float64,(nthreads(), ncx  ,ncy   )) # markers per cell per thread
     # Initial configuration
     SetMarkers!( p, rad, xmax, xmin )  # Define phase on markers
     xc2   = repeat(xc, 1, length(yc))
@@ -181,7 +181,6 @@ end
         # Update cell info on markers
         @time LocateMarkers(p,dx,dy,xc,yc,xmin,xmax,ymin,ymax)
         # Interpolate k from markers
-        etac = zeros( ncx  , ncy  )
         @time Markers2Cells3!(p,etac,xc,yc,dx,dy,ncx,ncy,[eta1,eta2],0,0)
         # Initialize
         @time  CentroidsToVertices!( etav, etac, ncx, ncy, BC )
@@ -222,7 +221,7 @@ end
     if show_figs==1
         p1 = Plots.heatmap(xv*Lc, yce*Lc, Array(Vx)',   aspect_ratio=1, xlims=(minimum(xv*Lc), maximum(xv)*Lc), ylims=(minimum(yv)*Lc, maximum(yv)*Lc), c=Plots.cgrad(:roma, rev = true), title="Vx")
         p2 = Plots.heatmap(xce*Lc, yv*Lc, Array(Vy)',   aspect_ratio=1, xlims=(minimum(xv*Lc), maximum(xv)*Lc), ylims=(minimum(yv)*Lc, maximum(yv)*Lc), c=Plots.cgrad(:roma, rev = true), title="Vy")
-        p3 = Plots.heatmap(xc*Lc,  yc*Lc, Array(Pc)',    aspect_ratio=1, xlims=(minimum(xv*Lc), maximum(xv)*Lc), ylims=(minimum(yv)*Lc, maximum(yv)*Lc), c=Plots.cgrad(:roma, rev = true), title="P")
+        p3 = Plots.heatmap(xc*Lc,  yc*Lc, Array(Pc)',   aspect_ratio=1, xlims=(minimum(xv*Lc), maximum(xv)*Lc), ylims=(minimum(yv)*Lc, maximum(yv)*Lc), c=Plots.cgrad(:roma, rev = true), title="P")
         p4 = Plots.heatmap(xv*Lc,  yv*Lc, Array(etav)', aspect_ratio=1, xlims=(minimum(xv*Lc), maximum(xv)*Lc), ylims=(minimum(yv)*Lc, maximum(yv)*Lc), c=Plots.cgrad(:roma, rev = true), title="etav")
         display(Plots.plot( p1, p2, p3, p4, dpi=200 ) ) 
     end
