@@ -75,11 +75,12 @@ end
     gamma         = 1e4   # penalty factor
     Dir_scale     = 1.0   # Dirichlet scaling factor
     # Non-linear iterations 
-    niter_nl      = 5     # max. number of non-linear iterations
+    niter_nl      = 10    # max. number of non-linear iterations
     tol_nl        = 1e-3  # non-linear tolerance
     # Visualisation
     show_figs     = 1     # activates visualisation...
     nout          = 10    # ... every nout
+    experiment    = "MultiLayerExtension"
     # RK4 weights
     rkw = 1.0/6.0*[1.0 2.0 2.0 1.0] # for averaging
     rkv = 1.0/2.0*[1.0 1.0 2.0 2.0] # for time stepping
@@ -93,11 +94,11 @@ end
     n         = zeros(Float64, nphase)
     # Material 1
     Tref1     = 2.0  # reference flow stress
-    n[1]      = 3.0
+    n[1]      = 4.0
     eta0[1]   = Tref1 * (1.0/2.0) * abs(Ebg)^(-1.0/n[1])  # matrix viscosity
     # Material 2
     Tref2     = 2000 # reference flow stress
-    n[2]      = 10.0
+    n[2]      = 12.0
     eta0[2]   = Tref2 * (1.0/2.0) * abs(Ebg)^(-1.0/n[2]) # inclusion viscosity
     # BC definition
     BC = BoundaryConditions()
@@ -190,6 +191,13 @@ end
     SetInitialVelocity!( Vx, Vy, BC, xv, yv, xce, yce, xmin, xmax, ymin, ymax, ncx, ncy )
     Vxc    = 0.5.*(Vx[1:end-1,2:end-1] .+ Vx[2:end-0,2:end-1])
     Vyc    = 0.5.*(Vy[2:end-1,1:end-1] .+ Vy[2:end-1,2:end-0])
+    # Visualisation
+    viz_directory = string( "Figures_", experiment )
+    if isdir( viz_directory ) == false 
+        mkdir( viz_directory ) 
+    end 
+    path = string( "./", viz_directory, "/" ) 
+    anim = Plots.Animation( path, String[] ) 
     # TIME LOOP
     for it=1:nt
         @printf("-------------------------------------\n")
@@ -272,7 +280,6 @@ end
             dx, dy, xc, yc, xce, yce, xv, yv = GenerateMesh( xmin, xmax, ymin, ymax, ncx, ncy )
             SetInitialVelocity!( Vx, Vy, BC, xv, yv, xce, yce, xmin, xmax, ymin, ymax, ncx, ncy )
         end
-
         # Visualisation
         if show_figs==1 && ( mod(it,nout)==0 || it==1 )
             # Visualize
@@ -282,9 +289,10 @@ end
             # p4 = Plots.heatmap(xv*Lc,  yv*Lc, Array(etav)', aspect_ratio=1, xlims=(minimum(xv*Lc), maximum(xv)*Lc), ylims=(minimum(yv)*Lc, maximum(yv)*Lc), c=Plots.cgrad(:roma, rev = true), title="etav")
             p4 = Plots.heatmap(xc*Lc,  yc*Lc, Array(Tau.II)', aspect_ratio=1, xlims=(minimum(xv*Lc), maximum(xv)*Lc), ylims=(minimum(yv)*Lc, maximum(yv)*Lc), c=Plots.cgrad(:roma, rev = true), title="Tii")
             # p4 = Plots.heatmap(xc*Lc,  yc*Lc, Array(phase_perc[1,:,:])', aspect_ratio=1, xlims=(minimum(xv*Lc), maximum(xv)*Lc), ylims=(minimum(yv)*Lc, maximum(yv)*Lc), c=Plots.cgrad(:roma, rev = true), title="phase %")
-            display(Plots.plot( p4, dpi=200 ) ) 
+            display(Plots.plot( p4, dpi=200 ) ); Plots.frame(anim) 
         end
     end
+    Plots.gif(anim, string( path, experiment, ".gif" ), fps = 15)
     return 
     end
 
