@@ -20,6 +20,7 @@ The script [Mechanics_v10_MultiLayerExt.jl](./Mechanics_v10_MultiLayerExt.jl) al
 
 With [Mechanics_v10_PeriodicSimpleShear.jl](./Mechanics_v10_PeriodicSimpleShear.jl) one can model periodic shear deformation.
 
-#![](/images/Periodic_Julia.png)
+<!-- #![](/images/Periodic_Julia.png) -->
 
-![](/images/PeriodicSimpleShear.gif)
+<!-- ![](/images/PeriodicSimpleShear.gif) -->
+<center><img src="/images/PeriodicSimpleShear.gif" alt="drawing" width="600"/></center>
