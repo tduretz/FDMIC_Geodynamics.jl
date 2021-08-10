@@ -1,6 +1,6 @@
 
 
-@views function StrainRate!(div,Eps,Vx,Vy,dx,dy)
+@views function StrainRate!( div::Matrix{Float64}, Eps::Tensor2D, Vx::Matrix{Float64}, Vy::Matrix{Float64}, dx::Float64, dy::Float64 )
     div    .= diff(Vx[:,2:end-1],dims=1)./dx + diff(Vy[2:end-1,:],dims=2)./dy 
     Eps.xx .= diff(Vx[:,2:end-1],dims=1)./dx .- 1.0/3.0 .* div
     Eps.yy .= diff(Vy[2:end-1,:],dims=2)./dy .- 1.0/3.0 .* div
@@ -12,7 +12,7 @@ end
 
 ########
 
-@views function Stress!(Tau,Eps,etac,etav)
+@views function Stress!( Tau::Tensor2D, Eps::Tensor2D, etac::Matrix{Float64}, etav::Matrix{Float64})
     Tau.xx .= 2.0.*etac.*Eps.xx 
     Tau.yy .= 2.0.*etac.*Eps.yy
     Tau.zz .= 2.0.*etac.*Eps.zz  
@@ -23,20 +23,20 @@ end
 
 ########
 
-@views function Residuals!(Fx,Fy,Fp,Tau,Pc,div,BC,ncx,ncy,dx,dy)
+@views function Residuals!( Fx::Matrix{Float64}, Fy::Matrix{Float64}, Fp::Matrix{Float64}, Tau::Tensor2D, Pc::Matrix{Float64}, div::Matrix{Float64}, BC::BoundaryConditions, ncx::Int64, ncy::Int64, dx::Float64, dy::Float64)
     Fx .= 0.0
     Fy .= 0.0
     Fp .= 0.0
     if BC.periodix==0
-        Fx[2:end-1,:] .= -( diff(Tau.xx .- Pc ,dims=1)./dx .+ diff(Tau.xy[2:end-1,:],dims=2)/dy )
+        Fx[2:end-1,:] .= ( diff(Tau.xx .- Pc ,dims=1)./dx .+ diff(Tau.xy[2:end-1,:],dims=2)/dy )
     else
         Sxx_ex             = zeros(ncx+1,ncy)
         Sxx_ex[2:end-0,:] .= -Pc .+ Tau.xx
         Sxx_ex[      1,:] .= -Pc[end,:] .+ Tau.xx[end,:]
         #Sxx_ex[    end,:] .= -Pc[  1,:] .+ Tau.xx[  1,:] # Do not assemble last column
-        Fx .= -( diff(Sxx_ex ,dims=1)./dx .+ diff(Tau.xy[1:end-1,:],dims=2)/dy )
+        Fx .= ( diff(Sxx_ex ,dims=1)./dx .+ diff(Tau.xy[1:end-1,:],dims=2)/dy )
     end
-    Fy[:,2:end-1] .= -( diff(Tau.yy .- Pc ,dims=2)./dy .+ diff(Tau.xy[:,2:end-1],dims=1)/dx )
+    Fy[:,2:end-1] .= ( diff(Tau.yy .- Pc ,dims=2)./dy .+ diff(Tau.xy[:,2:end-1],dims=1)/dx )
     Fp            .= -div
     # # For periodic
     # if BC.periodix==1
@@ -46,7 +46,7 @@ end
 
 ########
 
-@views function SetBCs( Vx, Vy, BC )
+@views function SetBCs( Vx::Matrix{Float64}, Vy::Matrix{Float64}, BC::BoundaryConditions )
     # Boundaries
     if BC.Vx.type_S == 22 Vx[:,  1] .= Vx[:,    2] end
     if BC.Vx.type_S == 11 Vx[:,  1] .= 2.0.*BC.Vx.Dir_S .- Vx[:,    2] end
@@ -65,7 +65,7 @@ end
 
 ########
 
-function NumberingStokes(BC, ncx, ncy)
+function NumberingStokes(BC::BoundaryConditions, ncx::Int64, ncy::Int64 )
     # Numbering
     if BC.periodix==0
         NumVx     = collect(reshape(1:(ncx+1)*ncy,ncx+1,ncy))
@@ -81,26 +81,38 @@ end
 
 ########
 
-@views function StokesAssembly( BC, NumVx, NumVy, NumP, etac, etav, DirScale, dx, dy )
+@views function StokesAssembly( BC::BoundaryConditions, NumVx::Matrix{Int64}, NumVy::Matrix{Int64}, NumP::Matrix{Int64}, etac::Matrix{Float64}, etav::Matrix{Float64}, DirScale::Float64, dx::Float64, dy::Float64 )
+
+    ncx = size(NumVx,1) - 1
+    ncy = size(NumVx,2)
+
+    if BC.periodix==0
+        nxvx = ncx+1
+        sx   = 0
+    else
+        nxvx = ncx+1#ncx # remove last column
+        sx   = 0#1   # shift 
+    end
 
     # Connectivity
-    iVxC      = NumVx
-    iVxW      =  ones(Int64, size(NumVx)); iVxW[2:end-0,: ] = NumVx[1:end-1,:]
-    iVxE      =  ones(Int64, size(NumVx)); iVxE[1:end-1,: ] = NumVx[2:end-0,:]        
-    iVxS      =  ones(Int64, size(NumVx)); iVxS[: ,2:end-0] = NumVx[:,1:end-1]
-    iVxN      =  ones(Int64, size(NumVx)); iVxN[: ,1:end-1] = NumVx[:,2:end-0]
-    iVySW     =  ones(Int64, size(NumVx)); iVySW[2:end-0,:] = NumVy[:,1:end-1]
-    iVySE     =  ones(Int64, size(NumVx)); iVySE[1:end-1,:] = NumVy[:,1:end-1]
-    iVyNW     =  ones(Int64, size(NumVx)); iVyNW[2:end-0,:] = NumVy[:,2:end-0]
-    iVyNE     =  ones(Int64, size(NumVx)); iVyNE[1:end-1,:] = NumVy[:,2:end-0]
-    iPW       =  ones(Int64, size(NumVx)); iPW[2:end-0,:]   = NumP
-    iPE       =  ones(Int64, size(NumVx)); iPE[1:end-1,:]   = NumP
+    iVxC      =  ones(Int64, nxvx, ncy);
+    iVxC     .=  NumVx[1:end-sx,:]
+    iVxW      =  ones(Int64, nxvx, ncy); iVxW[2:end-0,: ] = NumVx[1:end-1,:]
+    iVxE      =  ones(Int64, nxvx, ncy); iVxE[1:end-1,: ] = NumVx[2:end-0,:]        
+    iVxS      =  ones(Int64, nxvx, ncy); iVxS[: ,2:end-0] = NumVx[:,1:end-1]
+    iVxN      =  ones(Int64, nxvx, ncy); iVxN[: ,1:end-1] = NumVx[:,2:end-0]
+    iVySW     =  ones(Int64, nxvx, ncy); iVySW[2:end-0,:] = NumVy[:,1:end-1]
+    iVySE     =  ones(Int64, nxvx, ncy); iVySE[1:end-1,:] = NumVy[:,1:end-1]
+    iVyNW     =  ones(Int64, nxvx, ncy); iVyNW[2:end-0,:] = NumVy[:,2:end-0]
+    iVyNE     =  ones(Int64, nxvx, ncy); iVyNE[1:end-1,:] = NumVy[:,2:end-0]
+    iPW       =  ones(Int64, nxvx, ncy); iPW[2:end-0,:]   = NumP[:,:]
+    iPE       =  ones(Int64, nxvx, ncy); iPE[1:end-1,:]   = NumP[:,:]
 
     # Viscosity coefficients
-    etaW      = zeros(size(NumVx)); etaW[2:end-0,:] = etac[1:end-0,:]
-    etaE      = zeros(size(NumVx)); etaE[1:end-1,:] = etac[1:end-0,:]
-    etaS      = zeros(size(NumVx)); etaS[:,1:end-0] = etav[:,1:end-1] 
-    etaN      = zeros(size(NumVx)); etaN[:,1:end-0] = etav[:,2:end-0]
+    etaW      = zeros(Float64, nxvx, ncy); etaW[2:end-0,:] = etac[1:end-0,:]
+    etaE      = zeros(Float64, nxvx, ncy); etaE[1:end-1,:] = etac[1:end-0,:]
+    etaS      = zeros(Float64, nxvx, ncy); etaS[:,1:end-0] = etav[:,1:end-1] 
+    etaN      = zeros(Float64, nxvx, ncy); etaN[:,1:end-0] = etav[:,2:end-0]
 
     if BC.periodix==1
         etaW[  1,:] = etac[end,:]
@@ -125,8 +137,8 @@ end
     cVySE = -2/3*etaE./(dx.*dy) + 1.0*etaS./(dx.*dy)
     cVyNW = 1.0*etaN./(dx.*dy) - 2/3*etaW./(dx.*dy)
     cVyNE = 2/3*etaE./(dx.*dy) - 1.0*etaN./(dx.*dy)
-    cPW   = -1.0/dx .*  ones(size(NumVx))
-    cPE   =  1.0/dx .*  ones(size(NumVx))
+    cPW   = -1.0/dx .*  ones(Float64, nxvx, ncy)
+    cPE   =  1.0/dx .*  ones(Float64, nxvx, ncy)
 
     if BC.Vx.type_S==11
         cVxC[:,  1] .-= cVxS[:,  1]
@@ -268,17 +280,41 @@ end
 
     if BC.periodix==1
         # Remove redundant Vx equation on the right side to make Kuu matrix symmetric positive definite
-        iVxC  = iVxC[1:end-1,:];  cVxC  = cVxC[1:end-1,:]
-        iVxW  = iVxW[1:end-1,:];  cVxW  = cVxW[1:end-1,:]
-        iVxE  = iVxE[1:end-1,:];  cVxE  = cVxE[1:end-1,:]
-        iVxS  = iVxS[1:end-1,:];  cVxS  = cVxS[1:end-1,:]
-        iVxN  = iVxN[1:end-1,:];  cVxN  = cVxN[1:end-1,:]
-        iVySW = iVySW[1:end-1,:]; cVySW = cVySW[1:end-1,:]
-        iVySE = iVySE[1:end-1,:]; cVySE = cVySE[1:end-1,:]
-        iVyNW = iVyNW[1:end-1,:]; cVyNW = cVyNW[1:end-1,:]
-        iVyNE = iVyNE[1:end-1,:]; cVyNE = cVyNE[1:end-1,:]
-        iPW   = iPW[1:end-1,:];   cPW   = cPW[1:end-1,:]
-        iPE   = iPE[1:end-1,:];   cPE   = cPE[1:end-1,:]
+        iVxC  = collect(iVxC[1:end-1,:]);  cVxC  = collect(cVxC[1:end-1,:])
+        iVxW  = collect(iVxW[1:end-1,:]);  cVxW  = collect(cVxW[1:end-1,:])
+        iVxE  = collect(iVxE[1:end-1,:]);  cVxE  = collect(cVxE[1:end-1,:])
+        iVxS  = collect(iVxS[1:end-1,:]);  cVxS  = collect(cVxS[1:end-1,:])
+        iVxN  = collect(iVxN[1:end-1,:]);  cVxN  = collect(cVxN[1:end-1,:])
+        iVySW = collect(iVySW[1:end-1,:]); cVySW = collect(cVySW[1:end-1,:])
+        iVySE = collect(iVySE[1:end-1,:]); cVySE = collect(cVySE[1:end-1,:])
+        iVyNW = collect(iVyNW[1:end-1,:]); cVyNW = collect(cVyNW[1:end-1,:])
+        iVyNE = collect(iVyNE[1:end-1,:]); cVyNE = collect(cVyNE[1:end-1,:])
+        iPW   = collect(iPW[1:end-1,:]);   cPW   = collect(cPW[1:end-1,:])
+        iPE   = collect(iPE[1:end-1,:]);   cPE   = collect(cPE[1:end-1,:])
+        # ncx = size(cVxC,1)-1
+        # ncy = size(cVxC,2)
+        # iVxC1  = zeros(Int64,(ncx,ncy)); cVxC1  = zeros(Float64,(ncx,ncy))
+        # iVxW1  = zeros(Int64,(ncx,ncy)); cVxW1  = zeros(Float64,(ncx,ncy))
+        # iVxE1  = zeros(Int64,(ncx,ncy)); cVxE1  = zeros(Float64,(ncx,ncy))
+        # iVxS1  = zeros(Int64,(ncx,ncy)); cVxS1  = zeros(Float64,(ncx,ncy))
+        # iVxN1  = zeros(Int64,(ncx,ncy)); cVxN1  = zeros(Float64,(ncx,ncy));
+        # iVySW1  = zeros(Int64,(ncx,ncy)); cVySW1  = zeros(Float64,(ncx,ncy));
+        # iVySE1  = zeros(Int64,(ncx,ncy)); cVySE1  = zeros(Float64,(ncx,ncy));
+        # iVyNW1  = zeros(Int64,(ncx,ncy)); cVyNW1  = zeros(Float64,(ncx,ncy));
+        # iVyNE1  = zeros(Int64,(ncx,ncy)); cVyNE1  = zeros(Float64,(ncx,ncy));
+        # iPW1  = zeros(Int64,(ncx,ncy)); cPW1  = zeros(Float64,(ncx,ncy));
+        # iPE1  = zeros(Int64,(ncx,ncy)); cPE1  = zeros(Float64,(ncx,ncy));
+        # iVxC1  .= iVxC[1:end-1,:];  cVxC1  .= cVxC[1:end-1,:]
+        # iVxW1  .= iVxW[1:end-1,:];  cVxW1  .= cVxW[1:end-1,:]
+        # iVxE1  .= iVxE[1:end-1,:];  cVxE1  .= cVxE[1:end-1,:]
+        # iVxS1  .= iVxS[1:end-1,:];  cVxS1  .= cVxS[1:end-1,:]
+        # iVxN1  .= iVxN[1:end-1,:];  cVxN1  .= cVxN[1:end-1,:]
+        # iVySW1 .= iVySW[1:end-1,:]; cVySW1 .= cVySW[1:end-1,:]
+        # iVySE1 .= iVySE[1:end-1,:]; cVySE1 .= cVySE[1:end-1,:]
+        # iVyNW1 .= iVyNW[1:end-1,:]; cVyNW1 .= cVyNW[1:end-1,:]
+        # iVyNE1 .= iVyNE[1:end-1,:]; cVyNE1 .= cVyNE[1:end-1,:]
+        # iPW1   .= iPW[1:end-1,:];   cPW1   .= cPW[1:end-1,:]
+        # iPE1   .= iPE[1:end-1,:];   cPE1   .= cPE[1:end-1,:]
     end
 
     # Sparse matrix Kuu
@@ -287,6 +323,7 @@ end
     I   = zeros(  Int64, 9*(nVx + nVy) )
     J   = zeros(  Int64, 9*(nVx + nVy) )
     V   = zeros(Float64, 9*(nVx + nVy) )
+
     #------------------- Vx
     FillCoefficients!(I, J, V, 0*nVx, iVxC[:], iVxC[:], cVxC[:])
     FillCoefficients!(I, J, V, 1*nVx, iVxC[:], iVxW[:], cVxW[:])
@@ -354,8 +391,12 @@ end
 
 ########
 
-@views function StokesSolver!(Vx,Vy,Pc,NumVx,NumVy,NumP,fu,fp,Kuu,Kup,Kpu,etac,gamma,solver)
-
+@views function StokesSolver!(Vx::Matrix{Float64}, Vy::Matrix{Float64}, Pc::Matrix{Float64}, NumVx::Matrix{Int64}, NumVy::Matrix{Int64}, NumP::Matrix{Int64}, Fx::Matrix{Float64}, Fy::Matrix{Float64}, Fp::Matrix{Float64}, Kuu::SparseMatrixCSC{Float64, Int64}, Kup::SparseMatrixCSC{Float64, Int64}, Kpu::SparseMatrixCSC{Float64, Int64}, etac::Matrix{Float64}, gamma::Float64, solver::Int64)
+    fu = zeros(Float64, length(Fx) + length(Fy))
+    fp = zeros(Float64, length(Fp))
+    fu[1:length(Fx)] .= Fx[:]
+    fu[length(Fx)+1:end] .= Fy[:]
+    fp .= Fp[:]
     if solver == 0
         # Slightly compressible pressure bloack
         cP   = 1.0./gamma.*ones(Float64,size(etac,1),size(etac,2))
@@ -378,7 +419,7 @@ end
 
 ########
 
-@views function DecoupledSolver!(Vx,Vy,Pc,NumVx,NumVy,NumP,fu,fp,Kuu,Kup,Kpu,etac,gamma)
+@views function DecoupledSolver!( Vx::Matrix{Float64}, Vy::Matrix{Float64}, Pc::Matrix{Float64}, NumVx::Matrix{Int64}, NumVy::Matrix{Int64}, NumP::Matrix{Int64}, fu::Vector{Float64}, fp::Vector{Float64}, Kuu::SparseMatrixCSC{Float64, Int64}, Kup::SparseMatrixCSC{Float64, Int64}, Kpu::SparseMatrixCSC{Float64, Int64}, etac::Matrix{Float64}, gamma::Float64 )
     # Decoupled solve
     ndofu = size(Kup,1)
     ndofp = size(Kup,2)
@@ -412,7 +453,7 @@ end
 
 ########
 
-@views function SetInitialVelocity!( Vx, Vy, BC, xv, yv, xmin, xmax, ymin, ymax, ncx, ncy )
+@views function SetInitialVelocity!( Vx::Matrix{Float64}, Vy::Matrix{Float64}, BC::BoundaryConditions, xv::LinRange{Float64}, yv::LinRange{Float64}, xce::LinRange{Float64}, yce::LinRange{Float64}, xmin::Float64, xmax::Float64, ymin::Float64, ymax::Float64, ncx::Int64, ncy::Int64 )
 
     # Initial guess - Vx
     Vx[1    ,:] .= BC.Vx.Dir_W
@@ -433,10 +474,10 @@ end
         for j=1:size(Vx,2)
             wW = 1.0 - (xv[i]-xmin)/(xmax-xmin)
             Vx[i,j] = wW * BC.Vx.Dir_W[j] + (1.0-wW) * BC.Vx.Dir_E[j]
-            # if i>1 & i<size(Vx,1)
-            #     wS = 1.0 - (yce[j]-ymin)/(ymax-ymin)
-            #     Vx[i,j] += wS * BC.Vx.Dir_S[i] + (1.0-wS) * BC.Vx.Dir_N[i]
-            # end
+            if i>1 && i<size(Vx,1)
+                wS = 1.0 - (yce[j]-ymin)/(ymax-ymin)
+                Vx[i,j] += wS * BC.Vx.Dir_S[i] + (1.0-wS) * BC.Vx.Dir_N[i]
+            end
         end
     end
 
@@ -445,10 +486,10 @@ end
         for j=1:size(Vy,2)
             wS = 1.0 - (yv[j]-ymin)/(ymax-ymin)
             Vy[i,j] = wS * BC.Vy.Dir_S[i] + (1.0-wS) * BC.Vy.Dir_N[i]
-            # if j>1 & j<size(Vy,2)
-            #     wW = 1.0 - (xce[i]-xmin)/(xmax-xmin)
-            #     Vy[i,j] += wW * BC.Vy.Dir_W[j] + (1.0-wW) * BC.Vy.Dir_E[j]
-            # end
+            if j>1 && j<size(Vy,2)
+                wW = 1.0 - (xce[i]-xmin)/(xmax-xmin)
+                Vy[i,j] += wW * BC.Vy.Dir_W[j] + (1.0-wW) * BC.Vy.Dir_E[j]
+            end
         end
     end
     return

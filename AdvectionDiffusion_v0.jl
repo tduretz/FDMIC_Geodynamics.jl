@@ -137,7 +137,7 @@ for it=1:nt
     # Residual (Check)
     F =  ThermalResidual( T, T0, rho, Cp, H, kx, ky, dx, dy, dt, steady, BC.T, ncx, ncy )
     println("Solve   residual = ", norm(F))
-    @time RungeKutta!(p, nmark, rkv, rkw, dt, Vx, Vy, xv, yv, xce, yce, dx, dy, ncx, ncy)
+    @time RungeKutta!(p, nmark, rkv, rkw, BC, dt, Vx, Vy, xv, yv, xce, yce, dx, dy, ncx, ncy)
 
     if mod(it, nout)==0
     # Visualize

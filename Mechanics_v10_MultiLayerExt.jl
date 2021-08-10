@@ -172,7 +172,7 @@ end
     phm[1:nmark0]    = zeros(Float64, size(xmi))
     cellxm[1:nmark0] = zeros(Int64,   size(xmi)) #zeros(CartesianIndex{2}, size(xm))
     cellym[1:nmark0] = zeros(Int64,   size(xmi))
-    p      = Markers( xm, ym, Tm, phm, cellxm, cellym, nmark0, nmark_max )
+    p             = Markers( xm, ym, Tm, phm, cellxm, cellym, nmark0, nmark_max )
     mpc           = zeros(Float64,(ncx  ,ncy  )) # markers per cell
     mpc_th        = zeros(Float64,(nthreads(), ncx  ,ncy   )) # markers per cell
     phase_perc    = zeros(Float64,(nphase, ncx  ,ncy  )) # markers per cell
@@ -187,7 +187,7 @@ end
     yvy2  = repeat(yv, 1, length(xce))'
     Lx, Ly = xmax - xmin, ymax - ymin
     ax   = 1.0/2.0; ay = 1.0/2.0
-    SetInitialVelocity!( Vx, Vy, BC, xv, yv, xmin, xmax, ymin, ymax, ncx, ncy )
+    SetInitialVelocity!( Vx, Vy, BC, xv, yv, xce, yce, xmin, xmax, ymin, ymax, ncx, ncy )
     Vxc    = 0.5.*(Vx[1:end-1,2:end-1] .+ Vx[2:end-0,2:end-1])
     Vyc    = 0.5.*(Vy[2:end-1,1:end-1] .+ Vy[2:end-1,2:end-0])
     # TIME LOOP
@@ -242,7 +242,7 @@ end
             @time Kuu, Kup, Kpu = StokesAssembly( BC, NumVx, NumVy, NumP, etac, etav, Dir_scale, dx, dy )
             # Call solver
             println("Solver")
-            @time StokesSolver!(Vx,Vy,Pc,NumVx,NumVy,NumP,-[Fx[:]; Fy[:]],Fp[:],Kuu,Kup,Kpu,etac,gamma,solver)
+            @time StokesSolver!(Vx,Vy,Pc,NumVx,NumVy,NumP, Fx, Fy, Fp,Kuu,Kup,Kpu,etac,gamma,solver)
         
             # # Evaluate residuals
             # println("Residuals")
@@ -256,7 +256,7 @@ end
         end
 
         # Advect particles
-        @time RungeKutta!(p, nmark, rkv, rkw, dt, Vx, Vy, xv, yv, xce, yce, dx, dy, ncx, ncy)
+        @time RungeKutta!(p, nmark, rkv, rkw, BC, dt, Vx, Vy, xv, yv, xce, yce, dx, dy, ncx, ncy)
         # Deform box
         if PureShear_ALE==1
             xmin        += mean(BC.Vx.Dir_W) * dt
@@ -270,7 +270,7 @@ end
             L = xmax - xmin
             println("Box pure shear deformation: ", (L-L0)/L0*100, "%" )
             dx, dy, xc, yc, xce, yce, xv, yv = GenerateMesh( xmin, xmax, ymin, ymax, ncx, ncy )
-            SetInitialVelocity!( Vx, Vy, BC, xv, yv, xmin, xmax, ymin, ymax, ncx, ncy )
+            SetInitialVelocity!( Vx, Vy, BC, xv, yv, xce, yce, xmin, xmax, ymin, ymax, ncx, ncy )
         end
 
         # Visualisation

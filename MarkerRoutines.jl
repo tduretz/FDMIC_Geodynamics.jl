@@ -272,7 +272,7 @@ return liste
 end
 
 
-function RungeKutta!(p, nmark, rkv, rkw, dt, Vx, Vy, xv, yv, xce, yce, dx, dy, ncx, ncy)
+function RungeKutta!(p, nmark, rkv, rkw, BC, dt, Vx, Vy, xv, yv, xce, yce, dx, dy, ncx, ncy)
 # Marker advection with 4th order Roger-Kutta
 @threads for k=1:nmark
     in = p.phase[k]>=0
@@ -282,12 +282,24 @@ function RungeKutta!(p, nmark, rkv, rkw, dt, Vx, Vy, xv, yv, xce, yce, dx, dy, n
         vy = 0.0
         # Roger-Gunther loop
         for rk=1:4
+            # println("step", rk)
             # Interp velocity from grid
             vxm = VxFromVxNodes(Vx, k, p, xv, yce, dx, dy, ncx, ncy, 1)
             vym = VyFromVxNodes(Vy, k, p, xce, yv, dx, dy, ncx, ncy, 1)
             # Temporary RK advection steps
             p.x[k] = x0 + rkv[rk]*dt*vxm
             p.y[k] = y0 + rkv[rk]*dt*vym
+            if BC.periodix==1
+                if p.x[k]<xv[1]
+                    # println("periW 1 ", p.x[k], vxm)
+                    p.x[k]+=(xv[end]-xv[1]) 
+                    # println("periW 2 ", p.x[k], vxm)
+                end
+                if p.x[k]>xv[end] 
+                    # println("periE")
+                    p.x[k]-=(xv[end]-xv[1]) 
+                end
+            end
             # Average final velocity 
             vx    += rkw[rk]*vxm
             vy    += rkw[rk]*vym
@@ -295,7 +307,18 @@ function RungeKutta!(p, nmark, rkv, rkw, dt, Vx, Vy, xv, yv, xce, yce, dx, dy, n
         # Advect points
         p.x[k] = x0 + (in==1) * rkv[4]*dt*vx
         p.y[k] = y0 + (in==1) * rkv[4]*dt*vy
-    end
+        if BC.periodix==1
+            if p.x[k]<xv[1]
+                # println("periW 1 ", p.x[k], vxm)
+                p.x[k]+=(xv[end]-xv[1]) 
+                # println("periW 2 ", p.x[k], vxm)
+            end
+            if p.x[k]>xv[end] 
+                # println("periE")
+                p.x[k]-=(xv[end]-xv[1]) 
+            end
+        end
+end
 end
 
 # Interpolation from Vx nodes to particles
@@ -334,6 +357,7 @@ end
     end
     # Compute vx
     vxm = (1-dymi/dy) * vxm13 + (dymi/dy) * vxm24
+    # println(p.x[k], " ", xv[k], " ", vxm)
     return vxm
 end
 @views function VyFromVxNodes(Vy, k, p, xce, yv, dx, dy, ncx, ncy, new)

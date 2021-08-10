@@ -54,6 +54,7 @@ steady    = 1
 kc        = zeros( ncx+0, ncy+0)
 Vx        = zeros( ncx+1, ncy+2) # !!! GHOST ROWS
 Vy        = zeros( ncx+2, ncy+1) # !!! GHOST COLUMNS
+BC        = BoundaryConditions()
 # Initialise markers
 nmark0    = ncx*ncy*nmx*nmy; # total initial number of marker in grid
 dx,  dy   = (xmax-xmin)/ncx, (ymax-ymin)/ncy
@@ -112,7 +113,7 @@ for it=1:nt
     # Interpolate k from markers
     kc = zeros( ncx  , ncy  )
     @time Markers2Cells3!(p,kc,xc,yc,dx,dy,ncx,ncy,[k1,k2],0,0)
-    @time RungeKutta!(p, nmark, rkv, rkw, dt, Vx, Vy, xv, yv, xce, yce, dx, dy, ncx, ncy)
+    @time RungeKutta!(p, nmark, rkv, rkw, BC, dt, Vx, Vy, xv, yv, xce, yce, dx, dy, ncx, ncy)
 end
     # Visualize
     # p1 = Plots.heatmap(xv*Lc, yce*Lc, Array(Vx)', aspect_ratio=1, xlims=(minimum(xv*Lc), maximum(xv)*Lc), ylims=(minimum(yv)*Lc, maximum(yv)*Lc), c=Plots.cgrad(:roma, rev = true), title="T")
@@ -125,7 +126,6 @@ end
     # println(size(Vy))
     # p1 = Plots.quiver!(xc2[1:stp:end]*Lc, yc2[1:stp:end]*Lc, quiver=(Vxc2[1:stp:end], Vyc2[1:stp:end]))
     # p1 = Plots.heatmap(xc*Lc, yc*Lc, Array((T*Tc.-0*273.15))', aspect_ratio=1, xlims=(minimum(xv*Lc), maximum(xv)*Lc), ylims=(minimum(yv)*Lc, maximum(yv)*Lc), c=Plots.cgrad(:roma, rev = true), title="T")
-    # p1 = Plots.scatter!(p.x[p.phase.==1], p.y[p.phase.==1], c=:white,  markersize=0.5, alpha=0.8, legend=false)
     # p1 = Plots.scatter!(p.x[p.phase.==2], p.y[p.phase.==2], c=:green,  markersize=1.0, alpha=0.8, legend=false)
     # p1 = Plots.scatter!(p.x[p.phase.==1], p.y[p.phase.==1], c=:white, markershape=:circle,  markersize=2.0, alpha=0.5, legend=false, markerstrokewidth = 0)
     # p1 = Plots.scatter!(p.x[p.phase.==2], p.y[p.phase.==2], c=:white, markershape=:hexagon,  markersize=2.0, alpha=1.0, legend=false, markerstrokewidth = 0)
