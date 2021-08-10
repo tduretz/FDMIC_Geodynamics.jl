@@ -12,8 +12,12 @@ The script [Mechanics_v10_MultiLayerExt.jl](./Mechanics_v10_MultiLayerExt.jl) al
 
 ![](/images/MLPS_Julia.png)
 
+![](/images/MultiLayerExtension.gif)
+
 # Periodic simple shear Stokes flow + advection
 
 With [Mechanics_v10_PeriodicSimpleShear.jl](./Mechanics_v10_PeriodicSimpleShear.jl) one can model periodic shear deformation.
 
 ![](/images/Periodic_Julia.png)
+
+![](/images/PeriodicSimpleShear.gif)
