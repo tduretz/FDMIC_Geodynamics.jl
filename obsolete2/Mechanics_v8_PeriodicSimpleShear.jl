@@ -1,8 +1,16 @@
+using Printf, Statistics
+using LoopVectorization
+import Plots
+using LinearAlgebra, SparseArrays 
+import UnicodePlots
+using Base.Threads
 ##############
-using Revise
-using FDMIC_Geodynamics
-using LoopVectorization, Printf, Base.Threads, Plots, Revise, LinearAlgebra, Statistics, SparseArrays
-include("./src/EvalAnalDani_v2.jl")
+include("DataStructures.jl")
+include("ThermalRoutines.jl")
+include("MechanicsRoutines.jl")
+include("MarkerRoutines.jl")
+include("GridRoutines.jl")
+include("SparseRoutines.jl")
 ##############
 function SetMarkers!( p, R, xmax, xmin )
     @tturbo for k=1:p.nmark
@@ -11,8 +19,7 @@ function SetMarkers!( p, R, xmax, xmin )
     end
 end
 ##############
-@views function main( N )
-
+@views function main( )
     println("#####################")
     println("###### M2Di.jl ######")
     println("#####################")
@@ -20,7 +27,7 @@ end
     gamma     = 1e4
     solver    = 1   # 0: coupled --- 1: decoupled 
     Dir_scale = 1.0
-    show_figs = 0
+    show_figs = 1
     # Domain
     xmin      = -1.0
     xmax      =  1.0
@@ -32,8 +39,8 @@ end
     Tc        = 1.0
     tc        = 1.0/abs(Ebg)       
     # Numerics
-    ncx       = N
-    ncy       = N
+    ncx       = 50
+    ncy       = 50
     nt        = 1
     nout      = 50
     dx, dy    = (xmax-xmin)/ncx, (ymax-ymin)/ncy
@@ -58,42 +65,15 @@ end
     # BC definition
     BC = BoundaryConditions()
     ## Pure shear - full Dirichlet
-    BC.Vx.type_W = 1;     BC.Vx.Dir_W = 1.0*ones(ncy+2)
-    BC.Vx.type_E = 1;     BC.Vx.Dir_E =-1.0*ones(ncy+2)      
-    BC.Vx.type_S =11;     BC.Vx.Dir_S = 0.0*ones(ncx+1)
-    BC.Vx.type_N =11;     BC.Vx.Dir_N = 0.0*ones(ncx+1)
-    BC.Vy.type_W =11;     BC.Vy.Dir_W = 0.0*ones(ncy+1)
-    BC.Vy.type_E =11;     BC.Vy.Dir_E = 0.0*ones(ncy+1)       
-    BC.Vy.type_S = 1;     BC.Vy.Dir_S =-1.0*ones(ncx+2)
-    BC.Vy.type_N = 1;     BC.Vy.Dir_N = 1.0*ones(ncx+2)
-    # Evaluate BC's: West/East Vx
-    for j=1:ncy+2
-        vxa, vya = SolutionFields_v(eta1, eta2, rad, Ebg, 0.0, xmin, yce[j], 0)
-        BC.Vx.Dir_W[j] = vxa
-        vxa, vya = SolutionFields_v(eta1, eta2, rad, Ebg, 0.0, xmax, yce[j], 0)
-        BC.Vx.Dir_E[j] = vxa
-    end
-    # Evaluate BC's: South/North Vx
-    for i=1:ncx+1
-        vxa, vya = SolutionFields_v(eta1, eta2, rad, Ebg, 0.0, xv[i], ymin, 0)
-        BC.Vx.Dir_S[i] = vxa
-        vxa, vya = SolutionFields_v(eta1, eta2, rad, Ebg, 0.0, xv[i], ymax, 0)
-        BC.Vx.Dir_N[i] = vxa
-    end
-    # Evaluate BC's: West/East Vy
-    for j=1:ncy+1
-        vxa, vya = SolutionFields_v(eta1, eta2, rad, Ebg, 0.0, xmin, yv[j], 0)
-        BC.Vy.Dir_W[j] = vya
-        vxa, vya = SolutionFields_v(eta1, eta2, rad, Ebg, 0.0, xmax, yv[j], 0)
-        BC.Vy.Dir_E[j] = vya
-    end
-    # Evaluate BC's: South/North Vy
-    for i=1:ncx+2
-        vxa, vya = SolutionFields_v(eta1, eta2, rad, Ebg, 0.0, xce[i], ymin, 0)
-        BC.Vy.Dir_S[i] = vya
-        vxa, vya = SolutionFields_v(eta1, eta2, rad, Ebg, 0.0, xce[i], ymax, 0)
-        BC.Vy.Dir_N[i] = vya
-    end
+    BC.periodix  = 1
+    BC.Vx.type_W = 0;     BC.Vx.Dir_W = 0.0*ones(ncy+2)
+    BC.Vx.type_E = 0;     BC.Vx.Dir_E =-0.0*ones(ncy+2)      
+    BC.Vx.type_S =11;     BC.Vx.Dir_S =-1.0*ones(ncx+1)
+    BC.Vx.type_N =11;     BC.Vx.Dir_N = 1.0*ones(ncx+1)
+    BC.Vy.type_W = 0;     BC.Vy.Dir_W = 0.0*ones(ncy+1)
+    BC.Vy.type_E = 0;     BC.Vy.Dir_E = 0.0*ones(ncy+1)       
+    BC.Vy.type_S = 1;     BC.Vy.Dir_S =-0.0*ones(ncx+2)
+    BC.Vy.type_N = 1;     BC.Vy.Dir_N = 0.0*ones(ncx+2)
     # Allocate tables
     etac      = zeros(Float64, ncx  , ncy  )
     etav      = zeros(Float64, ncx+1, ncy+1)
@@ -131,11 +111,11 @@ end
     xm[1:nmark0]     = vec(xmi)
     ym[1:nmark0]     = vec(ymi)
     phm[1:nmark0]    = zeros(Float64, size(xmi))
-    cellxm[1:nmark0] = zeros(Int64,   size(xmi)) #zeros(CartesianIndex{2}, size(xm))
+    cellxm[1:nmark0] = zeros(Int64,   size(xmi)) 
     cellym[1:nmark0] = zeros(Int64,   size(xmi))
-    p      = Markers( xm, ym, Tm, phm, cellxm, cellym, nmark0, nmark_max )
-    mpc         = zeros(Float64,(ncx  ,ncy  )) # markers per cell
-    mpc_th      = zeros(Float64,(nthreads(), ncx  ,ncy   )) # markers per cell
+    p                = Markers( xm, ym, Tm, phm, cellxm, cellym, nmark0, nmark_max )
+    mpc              = zeros(Float64,(ncx  ,ncy  ))              # markers per cell
+    mpc_th           = zeros(Float64,(nthreads(), ncx  ,ncy   )) # markers per cell per thread
     # Initial configuration
     SetMarkers!( p, rad, xmax, xmin )  # Define phase on markers
     xc2   = repeat(xc, 1, length(yc))
@@ -201,7 +181,6 @@ end
         # Update cell info on markers
         @time LocateMarkers(p,dx,dy,xc,yc,xmin,xmax,ymin,ymax)
         # Interpolate k from markers
-        etac = zeros( ncx  , ncy  )
         @time Markers2Cells3!(p,etac,xc,yc,dx,dy,ncx,ncy,[eta1,eta2],0,0)
         # Initialize
         @time  CentroidsToVertices!( etav, etac, ncx, ncy, BC )
@@ -238,56 +217,17 @@ end
         println("|Fy| = ", norm(Fy)/length(Fy))
         println("|Fp| = ", norm(Fp)/length(Fp))
     end
-    Pca       = zeros(Float64, ncx+0, ncy+0)
-    Vxca      = zeros(Float64, ncx+0, ncy+0)
-    Vyca      = zeros(Float64, ncx+0, ncy+0)
-
-    for i=1:size(Pca,1)
-        for j=1:size(Pca,2)
-            x  = xc[i]
-            y  = yc[j]
-            in = sqrt(x^2.0 + y^2.0)<=rad
-            pa        = SolutionFields_p(eta1, eta2, rad, Ebg, 0.0, x, y, in)
-            vxa, vya  = SolutionFields_v(eta1, eta2, rad, Ebg, 0.0, x, y, in)
-            Pca[i,j]  = pa
-            Vxca[i,j] = vxa
-            Vyca[i,j] = vya
-        end
-    end
-
-    # Errors
-    Vxc   = 0.5*(Vx[1:end-1,:2:end-1] .+ Vx[2:end-0,:2:end-1])
-    Vyc   = 0.5*(Vy[2:end-1,:1:end-1] .+ Vy[2:end-1,:2:end-0])
-    errV  = sqrt.((Vxc .- Vxca).^2 .+ (Vyc .- Vyca).^2) #.- sqrt.(Vxca.^2 .+ Vyca.^2)
-    errP  = abs.(Pc.-Pca)
-    println("L1 error V :", mean(errV))
-    println("L1 error P :", mean(errP ))
     # Visualize
     if show_figs==1
-        p1 = Plots.heatmap(xv*Lc, yce*Lc, Array(errVx)', aspect_ratio=1, xlims=(minimum(xv*Lc), maximum(xv)*Lc), ylims=(minimum(yv)*Lc, maximum(yv)*Lc), c=Plots.cgrad(:roma, rev = true), title="Vx")
-        p2 = Plots.heatmap(xce*Lc, yv*Lc, Array(errVy)', aspect_ratio=1, xlims=(minimum(xv*Lc), maximum(xv)*Lc), ylims=(minimum(yv)*Lc, maximum(yv)*Lc), c=Plots.cgrad(:roma, rev = true), title="Vy")
-        p3 = Plots.heatmap(xc*Lc,  yc*Lc, Array(errP)', aspect_ratio=1, xlims=(minimum(xv*Lc), maximum(xv)*Lc), ylims=(minimum(yv)*Lc, maximum(yv)*Lc), c=Plots.cgrad(:roma, rev = true), title="P")
+        p1 = Plots.heatmap(xv*Lc, yce*Lc, Array(Vx)',   aspect_ratio=1, xlims=(minimum(xv*Lc), maximum(xv)*Lc), ylims=(minimum(yv)*Lc, maximum(yv)*Lc), c=Plots.cgrad(:roma, rev = true), title="Vx")
+        p2 = Plots.heatmap(xce*Lc, yv*Lc, Array(Vy)',   aspect_ratio=1, xlims=(minimum(xv*Lc), maximum(xv)*Lc), ylims=(minimum(yv)*Lc, maximum(yv)*Lc), c=Plots.cgrad(:roma, rev = true), title="Vy")
+        p3 = Plots.heatmap(xc*Lc,  yc*Lc, Array(Pc)',   aspect_ratio=1, xlims=(minimum(xv*Lc), maximum(xv)*Lc), ylims=(minimum(yv)*Lc, maximum(yv)*Lc), c=Plots.cgrad(:roma, rev = true), title="P")
         p4 = Plots.heatmap(xv*Lc,  yv*Lc, Array(etav)', aspect_ratio=1, xlims=(minimum(xv*Lc), maximum(xv)*Lc), ylims=(minimum(yv)*Lc, maximum(yv)*Lc), c=Plots.cgrad(:roma, rev = true), title="etav")
         display(Plots.plot( p1, p2, p3, p4, dpi=200 ) ) 
     end
-    return mean(errV), mean(errP)
+    return
 end
 ####################################################
 ####################################################
 ####################################################
-N        = [50; 100; 200; 400;]
-L1_errV  = zeros(length(N))
-L1_errP  = zeros(length(N))
-h        = 2.0 ./ N
-# Call solver
-for ires=1:length(N)
-    @time eV, eP = main( N[ires] )
-    L1_errV[ires]     = eV
-    L1_errP[ires]     = eP
-end
-# Visualise
-p = Plots.plot(  log10.(1.0./h),  log10.(L1_errV), markershape=:rect, color=:blue, label="V", xlabel="1/h" )
-p = Plots.plot!( log10.(1.0./h),  log10.(L1_errP), markershape=:rect, color=:red,  label="P", ylabel="L1 error" )
-display( p )
-display(L1_errV[1:end-1]./L1_errV[2:end-0])
-display(L1_errP[1:end-1]./L1_errP[2:end-0])
+main()

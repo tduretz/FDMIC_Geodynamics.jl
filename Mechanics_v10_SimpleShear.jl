@@ -1,16 +1,7 @@
-using Printf, Statistics
-using LoopVectorization
-import Plots
-using LinearAlgebra, SparseArrays 
-import UnicodePlots
-using Base.Threads
 ##############
-include("DataStructures.jl")
-include("ThermalRoutines.jl")
-include("MechanicsRoutines.jl")
-include("MarkerRoutines.jl")
-include("GridRoutines.jl")
-include("SparseRoutines.jl")
+using Revise
+using FDMIC_Geodynamics
+using LoopVectorization, Printf, Base.Threads, Plots, Revise, LinearAlgebra, Statistics, SparseArrays
 ##############
 function SetMarkers!( p::Markers, R::Float64, xmin::Float64, xmax::Float64, ymin::Float64, ymax::Float64, dx::Float64, dy::Float64 )
     # Use this function to set up the model geometry
@@ -131,8 +122,8 @@ end
     Vx        = zeros(Float64, ncx+1, ncy+2) # !!! GHOST ROWS
     Vy        = zeros(Float64, ncx+2, ncy+1) # !!! GHOST COLUMNS
     div       = zeros(Float64, ncx+0, ncy+0)
-    Tau       = Tensor2D( zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+1, ncy+1), zeros(Float64, ncx+0, ncy+0) ) 
-    Eps       = Tensor2D( zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+1, ncy+1), zeros(Float64, ncx+0, ncy+0) ) 
+    Tau       = Tensor2D( zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+1, ncy+1), zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+0, ncy+0) ) 
+    Eps       = Tensor2D( zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+1, ncy+1), zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+0, ncy+0) ) 
     if BC.periodix==0 
         Fx        = zeros(Float64, ncx+1, ncy+0)
     else

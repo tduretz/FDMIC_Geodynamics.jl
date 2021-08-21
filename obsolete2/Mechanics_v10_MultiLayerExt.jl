@@ -1,9 +1,19 @@
+using Printf, Statistics
+using LoopVectorization
+import Plots
+using LinearAlgebra, SparseArrays 
+import UnicodePlots
+using Base.Threads
 ##############
-using Revise
-using FDMIC_Geodynamics
-using LoopVectorization, Printf, Base.Threads, Plots, Revise, LinearAlgebra, Statistics, SparseArrays
+include("DataStructures.jl")
+include("ThermalRoutines.jl")
+include("MechanicsRoutines.jl")
+include("MarkerRoutines.jl")
+include("GridRoutines.jl")
+include("SparseRoutines.jl")
 ##############
-function SetMarkers!( p, R, xmin, xmax, ymin, ymax, dx, dy )    # Use this function to set up the model geometry
+function SetMarkers!( p, R, xmin, xmax, ymin, ymax, dx, dy )
+    # Use this function to set up the model geometry
     L  = xmax - xmin
     H  = ymax - ymin
     x1 = -1.0
@@ -54,7 +64,7 @@ end
     nmy           = 4            # 2 marker per cell in y
     nmark         = ncx*ncy*nmx*nmy; # total initial number of marker in grid
     # Time discretisation
-    nt            = 10
+    nt            = 350
     dt            = 1
     Courant       = 0.25  # Courant number
     # Boundary conditions
@@ -68,7 +78,7 @@ end
     niter_nl      = 10    # max. number of non-linear iterations
     tol_nl        = 1e-3  # non-linear tolerance
     # Visualisation
-    show_figs     = 1     # activates visualisation...
+    show_figs     = 0     # activates visualisation...
     nout          = 10    # ... every nout
     experiment    = "MultiLayerExtension"
     # RK4 weights

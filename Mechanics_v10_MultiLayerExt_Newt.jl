@@ -3,7 +3,8 @@ using Revise
 using FDMIC_Geodynamics
 using LoopVectorization, Printf, Base.Threads, Plots, Revise, LinearAlgebra, Statistics, SparseArrays
 ##############
-function SetMarkers!( p, R, xmin, xmax, ymin, ymax, dx, dy )    # Use this function to set up the model geometry
+function SetMarkers!( p::Markers, R::Float64, xmin::Float64, xmax::Float64, ymin::Float64, ymax::Float64, dx::Float64, dy::Float64 )
+    # Use this function to set up the model geometry
     L  = xmax - xmin
     H  = ymax - ymin
     x1 = -1.0
@@ -19,8 +20,9 @@ function SetMarkers!( p, R, xmin, xmax, ymin, ymax, dx, dy )    # Use this funct
         p.phase[k] = (in==0)* 1.0 + (in==1)*2.0
     end
 end
+export SetMarkers!
 ##############
-function Rheology!( etac, etav, Eps, eta0, n, phase_perc, nphase, BC, ncx, ncy )
+function Rheology!( etac::Matrix{Float64}, etav::Matrix{Float64}, Eps::Tensor2D, eta0::Vector{Float64}, n::Vector{Float64}, phase_perc::Array{Float64, 3}, nphase::Int64, BC::BoundaryConditions, ncx::Int64, ncy::Int64 )
     # Compute effective viscosity for each phase
     etac .= 0.0
     for m=1:nphase
@@ -31,6 +33,7 @@ function Rheology!( etac, etav, Eps, eta0, n, phase_perc, nphase, BC, ncx, ncy )
     println("min Eii: ", minimum(Eps.II), " --- max Eii: ", maximum(Eps.II))
     println("min eta: ", minimum(etac), " --- max eta: ", maximum(etac))
 end
+export Rheology!
 ##############
 @views function main( )
     # Main routine
@@ -54,21 +57,21 @@ end
     nmy           = 4            # 2 marker per cell in y
     nmark         = ncx*ncy*nmx*nmy; # total initial number of marker in grid
     # Time discretisation
-    nt            = 10
+    nt            = 1#300
     dt            = 1
     Courant       = 0.25  # Courant number
     # Boundary conditions
     BC_type       = 1     # 1: Pure shear / 2: Simple shear / 3: Simple shear periodic
     PureShear_ALE = 1     # Deform box 
     # Solver
-    solver        = 1     # 0: coupled --- 1: decoupled 
+    solver        = 2     # 0: coupled --- 1: decoupled --- 2: KSP GCR
     gamma         = 1e4   # penalty factor
     Dir_scale     = 1.0   # Dirichlet scaling factor
     # Non-linear iterations 
-    niter_nl      = 10    # max. number of non-linear iterations
+    niter_nl      = 1#10    # max. number of non-linear iterations
     tol_nl        = 1e-3  # non-linear tolerance
     # Visualisation
-    show_figs     = 1     # activates visualisation...
+    show_figs     = 0     # activates visualisation...
     nout          = 10    # ... every nout
     experiment    = "MultiLayerExtension"
     # RK4 weights
@@ -234,14 +237,14 @@ end
 
             # Number equations
             println("Numbering")
-            @time NumVx, NumVy, NumP = NumberingStokes(BC, ncx, ncy)
+            @time NumVx, NumVy, NumP = NumberingStokes( BC, ncx, ncy )
             # Assemble Stokes matrices
             println("Assembly")
             @time Kuu, Kup, Kpu = StokesAssembly( BC, NumVx, NumVy, NumP, etac, etav, Dir_scale, dx, dy )
             # Call solver
             println("Solver")
             @time StokesSolver!(Vx,Vy,Pc,NumVx,NumVy,NumP, Fx, Fy, Fp,Kuu,Kup,Kpu,etac,gamma,solver)
-        
+
             # # Evaluate residuals
             # println("Residuals")
             # @time SetBCs( Vx, Vy, BC )
@@ -253,23 +256,23 @@ end
             # println("|Fp| = ", norm(Fp)/length(Fp))
         end
 
-        # Advect particles
-        @time RungeKutta!(p, nmark, rkv, rkw, BC, dt, Vx, Vy, xv, yv, xce, yce, dx, dy, ncx, ncy)
-        # Deform box
-        if PureShear_ALE==1
-            xmin        += mean(BC.Vx.Dir_W) * dt
-            xmax        += mean(BC.Vx.Dir_E) * dt
-            ymin        += mean(BC.Vy.Dir_S) * dt
-            ymax        += mean(BC.Vy.Dir_N) * dt            
-            BC.Vx.Dir_W .=-Ebg*xmin*ones(ncy+2)
-            BC.Vx.Dir_E .=-Ebg*xmax*ones(ncy+2)            
-            BC.Vy.Dir_S .= Ebg*ymin*ones(ncx+2)
-            BC.Vy.Dir_N .= Ebg*ymax*ones(ncx+2)
-            L = xmax - xmin
-            println("Box pure shear deformation: ", (L-L0)/L0*100, "%" )
-            dx, dy, xc, yc, xce, yce, xv, yv = GenerateMesh( xmin, xmax, ymin, ymax, ncx, ncy )
-            SetInitialVelocity!( Vx, Vy, BC, xv, yv, xce, yce, xmin, xmax, ymin, ymax, ncx, ncy )
-        end
+        # # Advect particles
+        # @time RungeKutta!(p, nmark, rkv, rkw, BC, dt, Vx, Vy, xv, yv, xce, yce, dx, dy, ncx, ncy)
+        # # Deform box
+        # if PureShear_ALE==1
+        #     xmin        += mean(BC.Vx.Dir_W) * dt
+        #     xmax        += mean(BC.Vx.Dir_E) * dt
+        #     ymin        += mean(BC.Vy.Dir_S) * dt
+        #     ymax        += mean(BC.Vy.Dir_N) * dt            
+        #     BC.Vx.Dir_W .=-Ebg*xmin*ones(ncy+2)
+        #     BC.Vx.Dir_E .=-Ebg*xmax*ones(ncy+2)            
+        #     BC.Vy.Dir_S .= Ebg*ymin*ones(ncx+2)
+        #     BC.Vy.Dir_N .= Ebg*ymax*ones(ncx+2)
+        #     L = xmax - xmin
+        #     println("Box pure shear deformation: ", (L-L0)/L0*100, "%" )
+        #     dx, dy, xc, yc, xce, yce, xv, yv = GenerateMesh( xmin, xmax, ymin, ymax, ncx, ncy )
+        #     SetInitialVelocity!( Vx, Vy, BC, xv, yv, xce, yce, xmin, xmax, ymin, ymax, ncx, ncy )
+        # end
         # Visualisation
         if show_figs==1 && ( mod(it,nout)==0 || it==1 )
             # Visualize

@@ -1,14 +1,8 @@
-name = "FDMIC_Geodynamics"
-uuid = "1518c8d5-495d-49b5-8bc4-26752c0120a1"
-authors = ["Duretz Thibault <thibault.duretz@univ-rennes1.fr>"]
-version = "0.1.0"
-
 [deps]
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 LoopVectorization = "bdcacae8-1622-11e9-2a5c-532679323890"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
-Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
 SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 UnicodePlots = "b8865327-cd53-5732-bb35-84acbb429228"

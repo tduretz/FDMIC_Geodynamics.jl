@@ -1,7 +1,12 @@
-##############
 using Revise
-using FDMIC_Geodynamics
-using LoopVectorization, Printf, Base.Threads, Plots, Revise, LinearAlgebra, Statistics, SparseArrays
+using LoopVectorization
+import Plots
+using LinearAlgebra, SparseArrays 
+import UnicodePlots
+using Base.Threads
+##############
+include("DataStructures.jl")
+include("ThermalRoutines.jl")
 ##############
 @views function main()
 # Domain

@@ -1,7 +1,13 @@
+using Revise, Printf
+using LoopVectorization
+import Plots
+using LinearAlgebra, SparseArrays 
+import UnicodePlots
+using Base.Threads
 ##############
-using Revise
-using FDMIC_Geodynamics
-using LoopVectorization, Printf, Base.Threads, Plots, Revise, LinearAlgebra, Statistics, SparseArrays
+include("DataStructures.jl")
+include("ThermalRoutines.jl")
+include("MarkerRoutines.jl")
 ##############
 function SetMarkers!( p, R )
 @tturbo for k=1:p.nmark

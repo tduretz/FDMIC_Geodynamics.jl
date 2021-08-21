@@ -1,33 +1,33 @@
+using Printf, Statistics
+using LoopVectorization
+import Plots
+using LinearAlgebra, SparseArrays 
+import UnicodePlots
+using Base.Threads
 ##############
-using Revise
-using FDMIC_Geodynamics
-using LoopVectorization, Printf, Base.Threads, Plots, Revise, LinearAlgebra, Statistics, SparseArrays
+include("DataStructures.jl")
+include("ThermalRoutines.jl")
+include("MechanicsRoutines.jl")
+include("MarkerRoutines.jl")
+include("GridRoutines.jl")
+include("SparseRoutines.jl")
 ##############
-function SetMarkers!( p, R, xmin, xmax, ymin, ymax, dx, dy )    # Use this function to set up the model geometry
-    L  = xmax - xmin
-    H  = ymax - ymin
-    x1 = -1.0
-    x2 =  1.0
+function SetMarkers!( p::Markers, R::Float64, xmin::Float64, xmax::Float64, ymin::Float64, ymax::Float64, dx::Float64, dy::Float64 )
+    # Use this function to set up the model geometry
      for k=1:p.nmark #@tturbo <---------rand does not work in @tturbo!!!!
-        is_pert    = (p.x[k]>x1) & (p.x[k]<x2)  
-        layer1     = abs(p.y[k] + is_pert*(dy*rand()-dy/2) - 0.2*H) < R/3.0
-        layer2     = abs(p.y[k] + is_pert*(dy*rand()-dy/2) - 0.1*H) < R/3.0
-        layer3     = abs(p.y[k] + is_pert*(dy*rand()-dy/2) - 0.00000*H) < R/3.0
-        layer4     = abs(p.y[k] + is_pert*(dy*rand()-dy/2) + 0.1*H) < R/3.0
-        layer5     = abs(p.y[k] + is_pert*(dy*rand()-dy/2) + 0.2*H) < R/3.0
-        in         = layer1 | layer2 | layer3 | layer4 | layer5
+        in         = ( ( (p.x[k])^2 + p.y[k]^2) < R^2 )
         p.phase[k] = (in==0)* 1.0 + (in==1)*2.0
     end
 end
 ##############
-function Rheology!( etac, etav, Eps, eta0, n, phase_perc, nphase, BC, ncx, ncy )
+function Rheology!( etac::Matrix{Float64}, etav::Matrix{Float64}, Eps::Tensor2D, eta0::Vector{Float64}, n::Vector{Float64}, phase_perc::Array{Float64, 3}, nphase::Int64, BC::BoundaryConditions, ncx::Int64, ncy::Int64 )
     # Compute effective viscosity for each phase
     etac .= 0.0
     for m=1:nphase
-        @tturbo eta    = eta0[m] * Eps.II.^(1.0/n[m] - 1.0)
-        @tturbo etac .+= phase_perc[m,:,:] .* eta
+        eta    = eta0[m] * Eps.II.^(1.0/n[m] - 1.0)
+        etac .+= phase_perc[m,:,:] .* eta
     end
-    @time CentroidsToVertices!( etav, etac, ncx, ncy, BC )
+    @time  CentroidsToVertices!( etav, etac, ncx, ncy, BC )
     println("min Eii: ", minimum(Eps.II), " --- max Eii: ", maximum(Eps.II))
     println("min eta: ", minimum(etac), " --- max eta: ", maximum(etac))
 end
@@ -40,37 +40,37 @@ end
     # Domain
     xmin          = -1.0
     xmax          =  1.0
-    ymin          = -2.0
-    ymax          =  2.0
+    ymin          = -1.0
+    ymax          =  1.0
     Ebg           = -1.0      # reference strain rate
     # Scales
     Lc            = 1.0
     Tc            = 1.0
     tc            = 1.0/abs(Ebg)       
     # Spatial discretisation
-    ncx           = 150
-    ncy           = 150
+    ncx           = 100
+    ncy           = 100
     nmx           = 4            # 2 marker per cell in x
     nmy           = 4            # 2 marker per cell in y
     nmark         = ncx*ncy*nmx*nmy; # total initial number of marker in grid
     # Time discretisation
-    nt            = 10
+    nt            = 500
     dt            = 1
-    Courant       = 0.25  # Courant number
+    Courant       = 0.4  # Courant number
     # Boundary conditions
-    BC_type       = 1     # 1: Pure shear / 2: Simple shear / 3: Simple shear periodic
-    PureShear_ALE = 1     # Deform box 
+    BC_type       = 3     # 1: Pure shear / 2: Simple shear / 3: Simple shear periodic
+    PureShear_ALE = 0     # Deform box 
     # Solver
     solver        = 1     # 0: coupled --- 1: decoupled 
     gamma         = 1e4   # penalty factor
     Dir_scale     = 1.0   # Dirichlet scaling factor
     # Non-linear iterations 
-    niter_nl      = 10    # max. number of non-linear iterations
+    niter_nl      = 5     # max. number of non-linear iterations
     tol_nl        = 1e-3  # non-linear tolerance
     # Visualisation
     show_figs     = 1     # activates visualisation...
     nout          = 10    # ... every nout
-    experiment    = "MultiLayerExtension"
+    experiment    = "PeriodicSimpleShear"
     # RK4 weights
     rkw = 1.0/6.0*[1.0 2.0 2.0 1.0] # for averaging
     rkv = 1.0/2.0*[1.0 1.0 2.0 2.0] # for time stepping
@@ -83,12 +83,12 @@ end
     eta0      = zeros(Float64, nphase)
     n         = zeros(Float64, nphase)
     # Material 1
-    Tref1     = 2.0  # reference flow stress
-    n[1]      = 4.0
+    Tref1     = 2000.0  # reference flow stress
+    n[1]      = 1.0
     eta0[1]   = Tref1 * (1.0/2.0) * abs(Ebg)^(-1.0/n[1])  # matrix viscosity
     # Material 2
-    Tref2     = 2000 # reference flow stress
-    n[2]      = 12.0
+    Tref2     = 2 # reference flow stress
+    n[2]      = 1.0
     eta0[2]   = Tref2 * (1.0/2.0) * abs(Ebg)^(-1.0/n[2]) # inclusion viscosity
     # BC definition
     BC = BoundaryConditions()
@@ -163,7 +163,7 @@ end
     phm[1:nmark0]    = zeros(Float64, size(xmi))
     cellxm[1:nmark0] = zeros(Int64,   size(xmi)) #zeros(CartesianIndex{2}, size(xm))
     cellym[1:nmark0] = zeros(Int64,   size(xmi))
-    p             = Markers( xm, ym, Tm, phm, cellxm, cellym, nmark0, nmark_max )
+    p      = Markers( xm, ym, Tm, phm, cellxm, cellym, nmark0, nmark_max )
     mpc           = zeros(Float64,(ncx  ,ncy  )) # markers per cell
     mpc_th        = zeros(Float64,(nthreads(), ncx  ,ncy   )) # markers per cell
     phase_perc    = zeros(Float64,(nphase, ncx  ,ncy  )) # markers per cell
@@ -202,7 +202,7 @@ end
         maxVx = maximum(abs.(Vx))
         maxVy = maximum(abs.(Vy))
         dt    = Courant*(maximum([dx,dy])/maximum([maxVx,maxVy]))
-        @printf("dt = %2.2e\n", dt)
+        @printf("max V = %2.2e --> dt = %2.2e\n", maximum([maxVx,maxVy]),dt)
         # Update cell info on markers
         @time LocateMarkers(p,dx,dy,xc,yc,xmin,xmax,ymin,ymax)
         # Interpolate k from markers
@@ -273,7 +273,7 @@ end
         # Visualisation
         if show_figs==1 && ( mod(it,nout)==0 || it==1 )
             # Visualize
-            # p1 = Plots.heatmap(xv*Lc, yce*Lc, Array(Vx)', aspect_ratio=1, xlims=(minimum(xv*Lc), maximum(xv)*Lc), ylims=(minimum(yv)*Lc, maximum(yv)*Lc), c=Plots.cgrad(:roma, rev = true), title="Vx")
+            # p4 = Plots.heatmap(xv*Lc, yce*Lc, Array(Vx)', aspect_ratio=1, xlims=(minimum(xv*Lc), maximum(xv)*Lc), ylims=(minimum(yv)*Lc, maximum(yv)*Lc), c=Plots.cgrad(:roma, rev = true), title="Vx")
             # p2 = Plots.heatmap(xce*Lc, yv*Lc, Array(Vy)', aspect_ratio=1, xlims=(minimum(xv*Lc), maximum(xv)*Lc), ylims=(minimum(yv)*Lc, maximum(yv)*Lc), c=Plots.cgrad(:roma, rev = true), title="Vy")
             # p3 = Plots.heatmap(xc*Lc,  yc*Lc, Array(Pc)', aspect_ratio=1, xlims=(minimum(xv*Lc), maximum(xv)*Lc), ylims=(minimum(yv)*Lc, maximum(yv)*Lc), c=Plots.cgrad(:roma, rev = true), title="P")
             # p4 = Plots.heatmap(xv*Lc,  yv*Lc, Array(etav)', aspect_ratio=1, xlims=(minimum(xv*Lc), maximum(xv)*Lc), ylims=(minimum(yv)*Lc, maximum(yv)*Lc), c=Plots.cgrad(:roma, rev = true), title="etav")
@@ -282,10 +282,8 @@ end
             display(Plots.plot( p4, dpi=200 ) ); Plots.frame(anim) 
         end
     end
-    if show_figs==1 Plots.gif(anim, string( path, experiment, ".gif" ), fps = 15) end
+    Plots.gif(anim, string( path, experiment, ".gif" ), fps = 15)
     return 
     end
 
-for it=1:2
-   @time main()
-end
+   @time main() 
