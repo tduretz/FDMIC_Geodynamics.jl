@@ -12,6 +12,4 @@ include("MechanicsSolvers.jl")
 include("MarkerRoutines.jl")
 include("GridRoutines.jl")
 include("SparseRoutines.jl")
-greet() = print("Welcome to FDMIC dasfs dasfs")
-export greet
 end

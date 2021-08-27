@@ -1,5 +1,21 @@
 using Base.Threads
 
+function InitialiseMarkerPositions!( p::Markers, domain::ModelDomain )
+    p.nmark     = domain.ncx*domain.ncy*p.nmx*p.nmy; # total initial number of marker in grid
+    p.nmark_ini = p.nmark; # total initial number of marker in grid
+    p.nmark_max = 3*p.nmark; # total initial number of marker in grid
+    dxm, dym    = domain.dx/p.nmx, domain.dy/p.nmy 
+    xm1d        = LinRange(domain.xmin+dxm/2, domain.xmax-dxm/2, domain.ncx*p.nmx)
+    ym1d        = LinRange(domain.ymin+dym/2, domain.ymax-dym/2, domain.ncy*p.nmy)
+    (xmi,ymi)   = ([x for x=xm1d,y=ym1d], [y for x=xm1d,y=ym1d])
+    p.x         = zeros(Float64, p.nmark_max)
+    p.y         = zeros(Float64, p.nmark_max)
+    p.x[1:p.nmark] .= vec(xmi)
+    p.y[1:p.nmark] .= vec(ymi)
+    return
+end
+export InitialiseMarkerPositions!
+
 @views function CopyMarkers!(p::Markers,ineigh::Int64)
     p.phase[p.nmark] = p.phase[ineigh]
     p.T[p.nmark]     = p.T[ineigh]
@@ -154,105 +170,6 @@ export FindClosestNeighbour
     end
 end
 export ReseedMarkers!
-
-@views function CountMarkers2!(p::Markers,mpc::Matrix{Float64},mpc_th::Array{Float64, 3},phase_perc::Array{Float64, 3},phase_perc_th::Array{Float64, 4},nphase::Int64,nmark::Int64,xmin::Float64,xmax::Float64,ymin::Float64,ymax::Float64,xc::LinRange{Float64},yc::LinRange{Float64},dx::Float64,dy::Float64,ncx::Int64,ncy::Int64)
-        
-    # Disable markers outside of the domain
-    @threads for k=1:nmark
-        if (p.x[k]<xmin || p.x[k]>xmax || p.y[k]<ymin || p.y[k]>ymax) 
-            @inbounds p.phase[k] = -1
-        end
-    end
-
-    # How many are outside? save indices for reuse
-    nmark_out_th = zeros(Int64, nthreads())
-    @threads for k=1:nmark
-        if p.phase[k] == -1
-            nmark_out_th[threadid()] += 1
-        end
-    end
-    nmark_out = 0
-    for ith=1:nthreads()
-        nmark_out += nmark_out_th[ith]
-    end
-    @printf("%d markers out\n", nmark_out)
-
-    # Count number of marker per cell
-    @threads for j=1:ncy
-        for i=1:ncx
-            for ith=1:nthreads()
-                mpc_th[ith,i,j] = 0.0
-                for m=1:nphase
-                    phase_perc_th[ith,m,i,j] = 0.0
-                end
-            end
-        end
-    end
-
-    @threads for k=1:nmark # @avx ne marche pas ici
-        if (p.phase[k]>=0)
-            m = Int64(p.phase[k])
-            # Get the column:
-            dstx = p.x[k] - xc[1];
-            i    = Int64(round(ceil( (dstx/dx) + 0.5)));
-            # Get the line:
-            dsty = p.y[k] - yc[1];
-            j    = Int64(round(ceil( (dsty/dy) + 0.5)));
-            # Increment cell count
-            mpc_th[threadid(),i,j] += 1.0
-            phase_perc_th[threadid(),m,i,j] += 1.0
-        end
-    end
-
-    @threads for j=1:ncy
-        for i=1:ncx
-            for ith=1:nthreads()
-                if ith == 1 
-                    mpc[i,j] = 0.0
-                    for m=1:nphase
-                        phase_perc[m,i,j] = 0.0
-                    end
-                end
-                mpc[i,j] += mpc_th[ith,i,j]
-                for m=1:nphase
-                    phase_perc[m,i,j] += phase_perc_th[ith,m,i,j]
-                end
-            end
-        end
-    end
-
-    # Normalize pahse percentages
-    for m=1:nphase
-        phase_perc[m,:,:] ./= mpc
-    end
-      
-    # Show infos
-    println("markers per cell:")
-    println("min: ", minimum(mpc), " --- max: ", maximum(mpc))
-    for m=1:nphase
-        println("phase ", m, " :")
-        println("min: ", minimum(phase_perc[m,:,:]), " --- max: ", maximum(phase_perc[m,:,:]))
-    end
-end
-export CountMarkers2!
-
-@views function LocateMarkers(p::Markers,dx::Float64,dy::Float64,xc::LinRange{Float64},yc::LinRange{Float64},xmin::Float64,xmax::Float64,ymin::Float64,ymax::Float64)
-    # Find marker cell indices
-    @threads for k=1:p.nmark
-        if (p.x[k]<xmin || p.x[k]>xmax || p.y[k]<ymin || p.y[k]>ymax) 
-            p.phase[k] = -1
-        end
-        if p.phase[k]>=0
-            dstx         = p.x[k] - xc[1]
-            i            = ceil(Int, dstx / dx + 0.5)
-            dsty         = p.y[k] - yc[1]
-            j            = ceil(Int, dsty / dy + 0.5)
-            p.cellx[k]   = i
-            p.celly[k]   = j
-        end
-    end
-end
-export LocateMarkers
 
 @views function ListMarkers( p::Markers, ncx, ncy )
 liste = hcat([[Int[] for i in 1:ncx] for j in 1:ncy]...)
@@ -524,113 +441,244 @@ export Markers2Cells3!
 end
 export CountMarkers!
 
+@views function CountMarkers3!( p::Markers, f::Fields2D, mat::MaterialParameters, dom::ModelDomain )
+        
+    ncx, ncy, dx, dy = dom.ncx, dom.ncy, dom.dx, dom.dy
+    nphase = mat.nphase
+    nmark  = p.nmark
 
-################################################################
-################################################################
+    # Disable markers outside of the domain
+    @threads for k=1:nmark
+        if (p.x[k]<dom.xmin || p.x[k]>dom.xmax || p.y[k]<dom.ymin || p.y[k]>dom.ymax) 
+            @inbounds p.phase[k] = -1
+        end
+    end
 
+    # How many are outside? save indices for reuse
+    nmark_out_th = zeros(Int64, nthreads())
+    @threads for k=1:nmark
+        if p.phase[k] == -1
+            nmark_out_th[threadid()] += 1
+        end
+    end
+    nmark_out = 0
+    for ith=1:nthreads()
+        nmark_out += nmark_out_th[ith]
+    end
+    @printf("%d markers out\n", nmark_out)
 
-# function RungeKuttaOpt!(p, nmark, rkv, rkw, dt, Vx, Vy, xv, yv, xce, yce, dx, dy, ncx, ncy)
-#     # Marker advection with 4th order Roger-Kutta
+    # Count number of marker per cell
+    @threads for j=1:ncy
+        for i=1:ncx
+            for ith=1:nthreads()
+                f.mpc_th[ith,i,j] = 0.0
+                for m=1:nphase
+                    f.phase_perc_th[ith,m,i,j] = 0.0
+                end
+            end
+        end
+    end
 
-#     # Roger-Gunther loop
-#     vx = zeros(p.nmark,1)
-#     vy = zeros(p.nmark,1)
-#     x0 = zeros(p.nmark,1)
-#     y0 = zeros(p.nmark,1)
-#     x0 .= p.x
-#     y0 .= p.y
+    @threads for k=1:nmark # @avx ne marche pas ici
+        if (p.phase[k]>=0)
+            m = Int64(p.phase[k])
+            # Get the column:
+            dstx = p.x[k] - dom.xc[1];
+            i    = Int64(round(ceil( (dstx/dx) + 0.5)));
+            # Get the line:
+            dsty = p.y[k] - dom.yc[1];
+            j    = Int64(round(ceil( (dsty/dy) + 0.5)));
+            # Increment cell count
+            f.mpc_th[threadid(),i,j] += 1.0
+            f.phase_perc_th[threadid(),m,i,j] += 1.0
+        end
+    end
 
-#     @tturbo for rk=1:4
-#        for k=1:nmark
-#             in  = p.phase[k]>=0
-#             vxm = 0.0
-#             vym = 0.0
-#             vx[k] += rkw[rk]*vxm
-#             vy[k] += rkw[rk]*vym
-#                 # Interp velocity from grid
-#                 # Interpolate vx
-#                 ix = Int64(round(trunc( (p.x[k] -  xv[1])/dx ) + 1));
-#                 jx = Int64(round(trunc( (p.y[k] - yce[1])/dy ) + 1));
-#                 i = ( (ix<1) & (ix<ncx)   ) * 1 + ( (ix>1) & (ix>ncx)   ) * (ncx  ) + ( (ix>=1) & (ix<=ncx  ) ) * ix
-#                 j = ( (jx<1) & (jx<ncy+1) ) * 1 + ( (jx>1) & (jx>ncy+1) ) * (ncy+1) + ( (jx>=1) & (jx<=ncy+1) ) * jx
-#                 # Compute distances
-#                 dxmj = p.x[k] -  xv[i]
-#                 dymi = p.y[k] - yce[j]
-#                 # Compute vx velocity for the top and bottom of the cell
-#                 vxm13 = Vx[i,j  ] * (1-dxmj/dx) + Vx[i+1,j  ]*dxmj/dx
-#                 vxm24 = Vx[i,j+1] * (1-dxmj/dx) + Vx[i+1,j+1]*dxmj/dx
+    @threads for j=1:ncy
+        for i=1:ncx
+            for ith=1:nthreads()
+                if ith == 1 
+                    f.mpc[i,j] = 0.0
+                    for m=1:nphase
+                        f.phase_perc[m,i,j] = 0.0
+                    end
+                end
+                f.mpc[i,j] += f.mpc_th[ith,i,j]
+                for m=1:nphase
+                    f.phase_perc[m,i,j] += f.phase_perc_th[ith,m,i,j]
+                end
+            end
+        end
+    end
 
-
-#                 iE      = (i<ncx) * (i+2) + (i>=ncx) * (ncx-1)
-#                 iW      = (i>1)   * (i-1) + (i<=1)   * 1
-#                 vxm13_1 = 0.5*((dxmj/dx-0.5)^2) * (Vx[i,j  ] - 2.0*Vx[i+1,j  ] + Vx[iE,j  ]);
-#                 vxm24_1 = 0.5*((dxmj/dx-0.5)^2) * (Vx[i,j+1] - 2.0*Vx[i+1,j+1] + Vx[iE,j+1]);
-
-#                 vxm13_2 = 0.5*((dxmj/dx-0.5)^2) * (Vx[iW,j  ] - 2.0*Vx[i,j  ] + Vx[i+1,j  ]);
-#                 vxm24_2 = 0.5*((dxmj/dx-0.5)^2) * (Vx[iW,j+1] - 2.0*Vx[i,j+1] + Vx[i+1,j+1]);
-
-#                 yesW = dxmj/dx>=0.5  
-#                 vxm13 += yesW * vxm13_1
-#                 vxm24 += yesW * vxm24_1
-#                 yesE = dxmj/dx<0.5 
-#                 vxm13 += yesE * vxm13_2
-#                 vxm24 += yesW * vxm24_2
-
-#                 # Compute vx
-#                 vxm = (1.0 - dymi/dy) * vxm13 + (dymi/dy) * vxm24
-#             #     iy = Int64(round(trunc( (p.x[k] - xce[1])/dx ) + 1));
-#             #     jy = Int64(round(trunc( (p.y[k] -  yv[1])/dy ) + 1));
-#             #     i = ( (iy<1) & (iy<ncx+1) ) * 1 + ( (iy>1) & (iy>ncx+1) ) * (ncx+1) + ( (iy>=1) & (iy<=ncx+1) ) * iy
-#             #     j = ( (jy<1) & (jy<ncy  ) ) * 1 + ( (jy>1) & (jy>ncy  ) ) * (ncy  ) + ( (jy>=1) & (jy<=ncy  ) ) * jy
-#             #     # Compute distances
-#             #     dxmj = p.x[k] - xce[i]
-#             #     dymi = p.y[k] -  yv[j]
-#             #     # Compute vy velocity for the left and right of the cell
-#             #     vym12 = Vy[i,j  ]*(1-dymi/dy) + Vy[i  ,j+1]*dymi/dy
-#             #     vym34 = Vy[i+1,j]*(1-dymi/dy) + Vy[i+1,j+1]*dymi/dy
+    # Normalize phase percentages
+    for m=1:nphase
+        f.phase_perc[m,:,:] ./= f.mpc
+    end
       
-#             #     jN = (j<ncy) * (j+2) + (j>=ncy) * ncy
-#             #     jS = (j>1)   * (j-1) + (j<=1) * 1
-#             #     vym12_1 = 0.5*((dymi/dy-0.5)^2) * ( Vy[i,j  ] - 2.0*Vy[i,j+1  ] + Vy[i,jN  ]);
-#             #     vym34_1 = 0.5*((dymi/dy-0.5)^2) * ( Vy[i+1,j] - 2.0*Vy[i+1,j+1] + Vy[i+1,jN]);
-#             #     vym12_2 = 0.5*((dymi/dy-0.5)^2) * ( Vy[i,jS  ] - 2.0*Vy[i,j  ] + Vy[i,j+1  ]);
-#             #     vym34_2 = 0.5*((dymi/dy-0.5)^2) * ( Vy[i+1,jS] - 2.0*Vy[i+1,j] + Vy[i+1,j+1]);
-          
-#             #     yesN = dymi/dy>=0.5
-#             #     vym12 += yesN * vym12_1
-#             #     vym34 += yesN * vym34_1
-#             #     yesS = dymi/dy<0.5
-#             #     vym12 += yesS * vym12_2
-#             #     vym34 += yesS * vym34_2
+    # Show infos
+    println("markers per cell:")
+    println("min: ", minimum(f.mpc), " --- max: ", maximum(f.mpc))
+    for m=1:nphase
+        println("phase ", m, " :")
+        println("min: ", minimum(f.phase_perc[m,:,:]), " --- max: ", maximum(f.phase_perc[m,:,:]))
+    end
+end
+export CountMarkers3!
 
-#             #     # if dymi/dy>=0.5
-#             #     #     if j<ncy
-#             #     #         vym12 += 0.5*((dymi/dy-0.5)^2) * ( Vy[i,j  ] - 2.0*Vy[i,j+1  ] + Vy[i,jN  ]);
-#             #     #         vym34 += 0.5*((dymi/dy-0.5)^2) * ( Vy[i+1,j] - 2.0*Vy[i+1,j+1] + Vy[i+1,jN]);
-#             #     #     end      
-#             #     # else
-#             #     #     if j>1
-#             #     #         vym12 += 0.5*((dymi/dy-0.5)^2) * ( Vy[i,jS  ] - 2.0*Vy[i,j  ] + Vy[i,j+1  ]);
-#             #     #         vym34 += 0.5*((dymi/dy-0.5)^2) * ( Vy[i+1,jS] - 2.0*Vy[i+1,j] + Vy[i+1,j+1]);
-#             #     #     end
-#             #     # end
-#             #     # Compute vy
-#             #     vym = (1-dxmj/dx)*vym12 + (dxmj/dx)*vym34                # Temporary RK advection steps
-#             p.x[k] = x0[k] + (in==1) * rkv[rk]*dt*vxm
-#             p.y[k] = y0[k] + (in==1) * rkv[rk]*dt*vym
-#             # Average final velocity 
-#             vx[k]   += rkw[rk]*vxm
-#             vy[k]   += rkw[rk]*vym
-            
+@views function ReseedMarkers2!( p::Markers, mpc::Matrix{Float64}, dom::ModelDomain)
 
-#         end
-#     end
+    ncx, ncy, dx, dy = dom.ncx, dom.ncy, dom.dx, dom.dy
+    mlist       = Array{Array{Int64}}(undef,ncx,ncy)
+    mlist_th    = Array{Array{Int64}}(undef,nthreads(),ncx,ncy)
 
-#     @tturbo for k=1:nmark
-#         in = p.phase[k]>=0
-#         # Advect points
-#         p.x[k] = x0[k] + (in==1) * rkv[4]*dt*vx[k]
-#         p.y[k] = y0[k] + (in==1) * rkv[4]*dt*vy[k]
-#     end
+    @tturbo for i=1:ncx
+        for j=1:ncy
+            mlist[i,j] = zeros(Int64(mpc[i,j]))
+        end
+    end
 
-# end
+    count = zeros(Int64,ncx,ncy)
+
+    for k=1:p.nmark # @avx ne marche pas ici
+        if p.phase[k]>=0
+            # Get the column:
+            dstx = p.x[k] - dom.xc[1];
+            i    = Int64(round(ceil( (dstx/dx) + 0.5)));
+            # Get the line:
+            dsty = p.y[k] - dom.yc[1];
+            j    = Int64(round(ceil( (dsty/dy) + 0.5)));
+            # Increment cell count
+            count[i,j] += 1
+            mlist[i,j][count[i,j]] = k
+        end
+    end
+
+    # display(mlist)
+    dxy = 10*(dx*dx + dy*dy)
+    for i=1:ncx
+        for j=1:ncy
+
+            if mpc[i,j] < 4
+
+                new_x = dom.xc[i]-dx/4.0
+                new_y = dom.yc[j]-dy/4.0
+                ineigh = FindClosestNeighbour( p, mpc, mlist, new_x, new_y, dxy, i, j, ncx, ncy )
+                if ineigh>0
+                    p.nmark+=1
+                    p.x[p.nmark] = new_x
+                    p.y[p.nmark] = new_y
+                    CopyMarkers!(p,ineigh)
+                end
+
+                new_x = dom.xc[i]+dx/4.0
+                new_y = dom.yc[j]-dy/4.0
+                ineigh = FindClosestNeighbour( p, mpc, mlist, new_x, new_y, dxy, i, j, ncx, ncy )
+                if ineigh>0
+                    p.nmark+=1
+                    p.x[p.nmark] = new_x
+                    p.y[p.nmark] = new_y
+                    CopyMarkers!(p,ineigh)
+                end
+
+                new_x = dom.xc[i]+dx/4.0
+                new_y = dom.yc[j]+dy/4.0
+                ineigh = FindClosestNeighbour( p, mpc, mlist, new_x, new_y, dxy, i, j, ncx, ncy )
+                if ineigh>0
+                    p.nmark+=1
+                    p.x[p.nmark] = new_x
+                    p.y[p.nmark] = new_y
+                    CopyMarkers!(p,ineigh)
+                end
+
+                new_x = dom.xc[i]-dx/4.0
+                new_y = dom.yc[j]+dy/4.0
+                ineigh = FindClosestNeighbour( p, mpc, mlist, new_x, new_y, dxy, i, j, ncx, ncy )
+                if ineigh>0
+                    p.nmark+=1
+                    p.x[p.nmark] = new_x
+                    p.y[p.nmark] = new_y
+                    CopyMarkers!(p,ineigh)
+                end
+
+            end
+        end
+    end
+end
+export ReseedMarkers2!
+
+@views function LocateMarkers2!(p::Markers,dom::ModelDomain)
+    # Find marker cell indices
+    @threads for k=1:p.nmark
+        if (p.x[k]<dom.xmin || p.x[k]>dom.xmax || p.y[k]<dom.ymin || p.y[k]>dom.ymax) 
+            p.phase[k] = -1
+        end
+        if p.phase[k]>=0
+            dstx         = p.x[k] - dom.xc[1]
+            i            = ceil(Int, dstx / dom.dx + 0.5)
+            dsty         = p.y[k] - dom.yc[1]
+            j            = ceil(Int, dsty / dom.dy + 0.5)
+            p.cellx[k]   = i
+            p.celly[k]   = j
+        end
+    end
+end
+export LocateMarkers2!
+
+################################################################
+################################################################
+
+function RungeKutta2!(p::Markers, f::Fields2D, params::ModelParameters, BC::BoundaryConditions, dom::ModelDomain)
+    
+    nmark = p.nmark
+    rkv, rkw, dt   = params.rkv, params.rkw, params.dt
+    ncx, ncy, dx, dy = dom.ncx, dom.ncy, dom.dx, dom.dy
+ 
+    # Marker advection with 4th order Roger-Kutta
+    @threads for k=1:nmark
+        in = p.phase[k]>=0
+            x0 = p.x[k];
+            y0 = p.y[k];
+            vx = 0.0
+            vy = 0.0
+            # Roger-Gunther loop
+            for rk=1:4
+                # println("step", rk)
+                # Interp velocity from grid
+                vxm = VxFromVxNodes(f.Vx, k, p, dom.xv, dom.yce, dx, dy, ncx, ncy, 1)
+                vym = VyFromVxNodes(f.Vy, k, p, dom.xce, dom.yv, dx, dy, ncx, ncy, 1)
+                # Temporary RK advection steps
+                p.x[k] = x0 + rkv[rk]*dt*vxm
+                p.y[k] = y0 + rkv[rk]*dt*vym
+                if BC.periodix==1
+                    if p.x[k]<dom.xv[1]
+                        # println("periW 1 ", p.x[k], vxm)
+                        p.x[k]+=(dom.xv[end]-dom.xv[1]) 
+                        # println("periW 2 ", p.x[k], vxm)
+                    end
+                    if p.x[k]>dom.xv[end] 
+                        # println("periE")
+                        p.x[k]-=(dom.xv[end]-dom.xv[1]) 
+                    end
+                end
+                # Average final velocity 
+                vx    += rkw[rk]*vxm
+                vy    += rkw[rk]*vym
+            end
+            # Advect points
+            p.x[k] = x0 + (in==1) * rkv[4]*dt*vx
+            p.y[k] = y0 + (in==1) * rkv[4]*dt*vy
+            if BC.periodix==1
+                if p.x[k]<dom.xv[1]
+                    # println("periW 1 ", p.x[k], vxm)
+                    p.x[k]+=(dom.xv[end]-dom.xv[1]) 
+                    # println("periW 2 ", p.x[k], vxm)
+                end
+                if p.x[k]>dom.xv[end] 
+                    # println("periE")
+                    p.x[k]-=(dom.xv[end]-dom.xv[1]) 
+                end
+            end
+    end
+    end
+    export RungeKutta2!

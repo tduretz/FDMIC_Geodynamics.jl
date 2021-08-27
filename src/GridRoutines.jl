@@ -90,10 +90,35 @@ export GenerateMesh
 
 ##############
 
-# @views function PureShearBoxUpdate!( xmin::Float64, xmax::Float64, ymin::Float64, ymax::Float64, BC::BoundaryConditions, Ebg::Float64, dt::Float64, L0::Float64, ncx::Int64, ncy::Int64 )
-    
+@views function GenerateMesh!( dom::ModelDomain )
+    """
+    This functions generate x and y coordinates of mesh centroids and vertices, it also computes the grid spacing
+    """
+    dom.dx, dom.dy    = (dom.xmax-dom.xmin)/dom.ncx, (dom.ymax-dom.ymin)/dom.ncy
+    dom.xc        = LinRange( dom.xmin+dom.dx/2, dom.xmax-dom.dx/2, dom.ncx  )
+    dom.yc        = LinRange( dom.ymin+dom.dy/2, dom.ymax-dom.dy/2, dom.ncy  )
+    dom.xce       = LinRange( dom.xmin-dom.dx/2, dom.xmax+dom.dx/2, dom.ncx+2)
+    dom.yce       = LinRange( dom.ymin-dom.dy/2, dom.ymax+dom.dy/2, dom.ncy+2)
+    dom.xv        = LinRange( dom.xmin     , dom.xmax     , dom.ncx+1)
+    dom.yv        = LinRange( dom.ymin     , dom.ymax     , dom.ncy+1)
+    return 
+end
+export GenerateMesh!
 
-#     # L = xmax - xmin
-#     # println("Box pure shear deformation: ", (L-L0)/L0*100, "%" )
-#     return
-# end
+##############
+
+@views function PureShearBoxUpdate!( dom::ModelDomain, BC::BoundaryConditions, params::ModelParameters )
+    dom.xmin    += mean(BC.Vx.Dir_W) * params.dt
+    dom.xmax    += mean(BC.Vx.Dir_E) * params.dt
+    dom.ymin    += mean(BC.Vy.Dir_S) * params.dt
+    dom.ymax    += mean(BC.Vy.Dir_N) * params.dt            
+    BC.Vx.Dir_W .=-params.Ebg*dom.xmin*ones(dom.ncy+2)
+    BC.Vx.Dir_E .=-params.Ebg*dom.xmax*ones(dom.ncy+2)            
+    BC.Vy.Dir_S .= params.Ebg*dom.ymin*ones(dom.ncx+2)
+    BC.Vy.Dir_N .= params.Ebg*dom.ymax*ones(dom.ncx+2)
+    dom.L = dom.xmax - dom.xmin
+    println("Box pure shear deformation: ", (dom.L-dom.L0)/dom.L0*100, "%" )
+    GenerateMesh!( dom )
+    return dom.dx, dom.dy
+end
+export PureShearBoxUpdate!

@@ -1,13 +1,14 @@
-@views function StrainRate!( div::Matrix{Float64}, Eps::Tensor2D, Vx::Matrix{Float64}, Vy::Matrix{Float64}, dx::Float64, dy::Float64 )
-    @tturbo div    .= diff(Vx[:,2:end-1],dims=1)./dx .+ diff(Vy[2:end-1,:],dims=2)./dy 
+@views function StrainRate!( Eps::Tensor2D, Vx::Matrix{Float64}, Vy::Matrix{Float64}, dom::ModelDomain )
+    dx, dy = dom.dx, dom.dy
+    @tturbo Eps.div    .= diff(Vx[:,2:end-1],dims=1)./dx .+ diff(Vy[2:end-1,:],dims=2)./dy 
     # ncx, ncy = size(div,1), size(div,2)
     # @tturbo for i=1:ncx
     #     for j=1:ncy
     #         div[i,j] = 1.0/dx * (Vx[i+1,j+1] - Vx[i,j+1]) + 1.0/dy * (Vy[i+1,j+1] - Vy[i+1,j])
     #     end
     # end
-    @tturbo Eps.xx .= diff(Vx[:,2:end-1],dims=1)./dx .- 1.0/3.0 .* div
-    @tturbo Eps.yy .= diff(Vy[2:end-1,:],dims=2)./dy .- 1.0/3.0 .* div
+    @tturbo Eps.xx .= diff(Vx[:,2:end-1],dims=1)./dx .- 1.0/3.0 .* Eps.div
+    @tturbo Eps.yy .= diff(Vy[2:end-1,:],dims=2)./dy .- 1.0/3.0 .* Eps.div
     @tturbo Eps.zz .= .-(Eps.xx .+ Eps.yy)
     @tturbo Eps.xy .= 0.5.*( diff(Vx,dims=2)./dy .+ diff(Vy,dims=1)/dx ) 
     VerticesToCentroids!( Eps.xy_c, Eps.xy )
@@ -18,11 +19,11 @@ export StrainRate!
 
 ########
 
-@views function Stress!( Tau::Tensor2D, Eps::Tensor2D, etac::Matrix{Float64}, etav::Matrix{Float64})
-    @tturbo Tau.xx .= 2.0.*etac.*Eps.xx 
-    @tturbo Tau.yy .= 2.0.*etac.*Eps.yy
-    @tturbo Tau.zz .= 2.0.*etac.*Eps.zz  
-    @tturbo Tau.xy .= 2.0.*etav.*Eps.xy 
+@views function Stress!( Tau::Tensor2D, Eps::Tensor2D, f::Fields2D )
+    @tturbo Tau.xx .= 2.0.*f.etac.*Eps.xx 
+    @tturbo Tau.yy .= 2.0.*f.etac.*Eps.yy
+    @tturbo Tau.zz .= 2.0.*f.etac.*Eps.zz  
+    @tturbo Tau.xy .= 2.0.*f.etav.*Eps.xy 
     VerticesToCentroids!( Tau.xy_c, Tau.xy )
     # Tau.xy_c     .= 0.25*(Tau.xy[1:end-1,1:end-1] .+ Tau.xy[1:end-1,2:end-0] .+ Tau.xy[2:end-0,1:end-1] .+ Tau.xy[2:end-0,2:end-0])
     @tturbo Tau.II .= sqrt.(0.5*(Tau.xx.^2 .+ Tau.xx.^2 .+ Tau.zz.^2) .+ Tau.xy_c.^2)
@@ -31,27 +32,50 @@ export Stress!
 
 ########
 
-@views function Residuals!( Fx::Matrix{Float64}, Fy::Matrix{Float64}, Fp::Matrix{Float64}, Tau::Tensor2D, Pc::Matrix{Float64}, div::Matrix{Float64}, BC::BoundaryConditions, ncx::Int64, ncy::Int64, dx::Float64, dy::Float64)
-    @tturbo Fx .= 0.0
-    @tturbo Fy .= 0.0
-    @tturbo Fp .= 0.0
+@views function Residuals!( f::Fields2D, Tau::Tensor2D, Eps::Tensor2D, BC::BoundaryConditions, dom::ModelDomain, params::ModelParameters )
+    dx, dy = dom.dx, dom.dy
+    @tturbo f.Fx .= 0.0
+    @tturbo f.Fy .= 0.0
+    @tturbo f.Fp .= 0.0
     if BC.periodix==0
-        Fx[2:end-1,:] .= ( diff(Tau.xx .- Pc ,dims=1)./dx .+ diff(Tau.xy[2:end-1,:],dims=2)/dy )
+        f.Fx[2:end-1,:] .= ( diff(Tau.xx .- f.Pc, dims=1)./dx .+ diff(Tau.xy[2:end-1,:], dims=2)/dy )
     else
         Sxx_ex             = zeros(ncx+1,ncy)
-        @tturbo Sxx_ex[2:end-0,:] .= -Pc .+ Tau.xx
-        Sxx_ex[      1,:] .= -Pc[end,:] .+ Tau.xx[end,:]
+        @tturbo Sxx_ex[2:end-0,:] .= -f.Pc .+ Tau.xx
+        Sxx_ex[      1,:] .= -f.Pc[end,:] .+ Tau.xx[end,:]
         #Sxx_ex[    end,:] .= -Pc[  1,:] .+ Tau.xx[  1,:] # Do not assemble last column
-        Fx .= ( diff(Sxx_ex ,dims=1)./dx .+ diff(Tau.xy[1:end-1,:],dims=2)/dy )
+        f.Fx .= ( diff(Sxx_ex, dims=1)./dx .+ diff(Tau.xy[1:end-1,:], dims=2)/dy )
     end
-    Fy[:,2:end-1] .= ( diff(Tau.yy .- Pc ,dims=2)./dy .+ diff(Tau.xy[:,2:end-1],dims=1)/dx )
-    @tturbo Fp            .= -div
+    f.Fy[:,2:end-1] .= ( diff(Tau.yy .- f.Pc, dims=2)./dy .+ diff(Tau.xy[:,2:end-1], dims=1)/dx )
+    @tturbo f.Fp            .= -Eps.div
     # # For periodic
     # if BC.periodix==1
     #     Fx = Fx[1:end-1,:]
     # end
 end
 export Residuals!
+@views function ResidualsComp!( f::Fields2D, Tau::Tensor2D, Eps::Tensor2D, BC::BoundaryConditions, dom::ModelDomain, params::ModelParameters )
+    dx, dy, ncx, ncy = dom.dx, dom.dy, dom.ncx, dom.ncy 
+    @tturbo f.Fx .= 0.0
+    @tturbo f.Fy .= 0.0
+    @tturbo f.Fp .= 0.0
+    if BC.periodix==0
+        f.Fx[2:end-1,:] .= ( diff(Tau.xx .- f.Pc, dims=1)./dx .+ diff(Tau.xy[2:end-1,:], dims=2)/dy )
+    else
+        Sxx_ex             = zeros(ncx+1,ncy)
+        @tturbo Sxx_ex[2:end-0,:] .= -f.Pc .+ Tau.xx
+        Sxx_ex[      1,:] .= -f.Pc[end,:] .+ Tau.xx[end,:]
+        #Sxx_ex[    end,:] .= -Pc[  1,:] .+ Tau.xx[  1,:] # Do not assemble last column
+        f.Fx .= ( diff(Sxx_ex, dims=1)./dx .+ diff(Tau.xy[1:end-1,:], dims=2)/dy )
+    end
+    f.Fy[:,2:end-1] .= ( diff(Tau.yy .- f.Pc, dims=2)./dy .+ diff(Tau.xy[:,2:end-1], dims=1)/dx )
+    if params.comp == 1
+        @tturbo f.Fp .= -Eps.div .- (f.Pc .- f.Pc0) ./ (f.Kc.*params.dt)
+    else
+        @tturbo f.Fp .= -Eps.div
+    end
+end
+export ResidualsComp!
 
 ########
 
@@ -75,27 +99,30 @@ export SetBCs
 
 ########
 
-function NumberingStokes(BC::BoundaryConditions, ncx::Int64, ncy::Int64 )
+function NumberingStokes!( f::Fields2D, BC::BoundaryConditions, dom::ModelDomain )
+    ncx, ncy = dom.ncx, dom.ncy
     # Numbering
     if BC.periodix==0
-        NumVx     = collect(reshape(1:(ncx+1)*ncy,ncx+1,ncy))
+        f.NumVx     = collect(reshape(1:(ncx+1)*ncy,ncx+1,ncy))
     else
-        NumVx             = zeros(Int64,(ncx+1),ncy)
-        NumVx[1:end-1,:] .= collect(reshape(1:(ncx+0)*ncy,ncx,ncy))
-        NumVx[end,:]     .= NumVx[1,:]
+        f.NumVx             = zeros(Int64,(ncx+1),ncy)
+        f.NumVx[1:end-1,:] .= collect(reshape(1:(ncx+0)*ncy,ncx,ncy))
+        f.NumVx[end,:]     .= f.NumVx[1,:]
     end
-    NumVy     = collect(reshape(1:ncx*(ncy+1),ncx,ncy+1) .+ maximum(NumVx))
-    NumP      = collect(reshape(1:(ncx)*ncy,ncx,ncy))
-    return NumVx, NumVy, NumP
+    f.NumVy     = collect(reshape(1:ncx*(ncy+1),ncx,ncy+1) .+ maximum(f.NumVx))
+    f.NumP      = collect(reshape(1:(ncx)*ncy,ncx,ncy))
+    return
 end
-export NumberingStokes
+export NumberingStokes!
 
 ########
 
-@views function StokesAssembly( BC::BoundaryConditions, NumVx::Matrix{Int64}, NumVy::Matrix{Int64}, NumP::Matrix{Int64}, etac::Matrix{Float64}, etav::Matrix{Float64}, DirScale::Float64, dx::Float64, dy::Float64 )
+@views function StokesAssembly( BC::BoundaryConditions, f::Fields2D, DirScale::Float64, dom::ModelDomain )
 
-    ncx = size(NumVx,1) - 1
-    ncy = size(NumVx,2)
+    ncx, ncy = dom.ncx, dom.ncy
+    dx, dy = dom.dx, dom.dy
+    NumVx, NumVy, NumP = f.NumVx, f.NumVy, f.NumP
+    etac, etav = f.etac, f.etav
 
     if BC.periodix==0
         nxvx = ncx+1
@@ -371,6 +398,7 @@ export NumberingStokes
     Kup = sparse( I, J, V)
     droptol!(Kup, 1e-9)
 
+    # Sparse matrix Kpu: Coefficients
     iVxW  =  ones(  Int64, size(NumP)); iVxW .= NumVx[1:end-1,:]
     iVxE  =  ones(  Int64, size(NumP)); iVxE .= NumVx[2:end-0,:]
     iVyS  =  ones(  Int64, size(NumP)); iVyS .= NumVy[:,1:end-1]
@@ -385,7 +413,7 @@ export NumberingStokes
     if BC.periodix==0
         cVxW[1,:] .= 0.0; cVxE[end,:] .= 0.0
     end
-    # Sparse matrix Kpu
+    # Sparse matrix Kpu: Triplets
     nP = length(NumP)
     I  = zeros(  Int64, 4*nP)
     J  = zeros(  Int64, 4*nP) 
@@ -445,3 +473,50 @@ export StokesAssembly
     return
 end
 export SetInitialVelocity!
+
+########
+
+@views function SetInitialVelocity2!( Vx::Matrix{Float64}, Vy::Matrix{Float64}, BC::BoundaryConditions, dom::ModelDomain )
+
+    ncx, ncy = dom.ncx, dom.ncy
+
+    # Initial guess - Vx
+    Vx[1    ,:] .= BC.Vx.Dir_W
+    Vx[end  ,:] .= BC.Vx.Dir_E
+    Vx[:,    2] .= BC.Vx.Dir_S
+    Vx[:,end-1] .= BC.Vx.Dir_N
+    Vy[2    ,:] .= BC.Vy.Dir_W
+    Vy[end-1,:] .= BC.Vy.Dir_E
+    Vy[:,    1] .= BC.Vy.Dir_S
+    Vy[:,  end] .= BC.Vy.Dir_N
+
+    Vx_ini = zeros(ncx+1,ncy+2)
+    Vx_ini .= Vx
+    Vy_ini = zeros(ncx+2,ncy+1)
+    Vy_ini .= Vy
+
+    for i=1:size(Vx,1)
+        for j=1:size(Vx,2)
+            wW = 1.0 - (dom.xv[i]-dom.xmin)/(dom.xmax-dom.xmin)
+            Vx[i,j] = wW * BC.Vx.Dir_W[j] + (1.0-wW) * BC.Vx.Dir_E[j]
+            if i>1 && i<size(Vx,1)
+                wS = 1.0 - (dom.yce[j]-dom.ymin)/(dom.ymax-dom.ymin)
+                Vx[i,j] += wS * BC.Vx.Dir_S[i] + (1.0-wS) * BC.Vx.Dir_N[i]
+            end
+        end
+    end
+
+    # Initial guess - Vy
+    for i=1:size(Vy,1)
+        for j=1:size(Vy,2)
+            wS = 1.0 - (dom.yv[j]-dom.ymin)/(dom.ymax-dom.ymin)
+            Vy[i,j] = wS * BC.Vy.Dir_S[i] + (1.0-wS) * BC.Vy.Dir_N[i]
+            if j>1 && j<size(Vy,2)
+                wW = 1.0 - (dom.xce[i]-dom.xmin)/(dom.xmax-dom.xmin)
+                Vy[i,j] += wW * BC.Vy.Dir_W[j] + (1.0-wW) * BC.Vy.Dir_E[j]
+            end
+        end
+    end
+    return
+end
+export SetInitialVelocity2!
