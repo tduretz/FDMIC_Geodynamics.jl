@@ -2,14 +2,14 @@
 Basic Finite difference / Marker-In-Cell code for teaching purposes.
 
 # Stokes solver
-The script [Mechanics_v11_SolVI_ViscousInclusionTest.jl](./Mechanics_v11_SolVI_ViscousInclusionTest.jl) produces first order L2 convergence of velocity and pressure using the SOLVI tests:
+The script [Mechanics_v11_SolVI_ViscousInclusionTest.jl](./Mechanics_v11_SolVI_ViscousInclusionTest.jl) produces first order L2 convergence of velocity and pressure using the SOLVI tests. See [e.g. Duretz et al., 2011](https://agupubs.onlinelibrary.wiley.com/doi/10.1029/2011GC003567) for some details. The original analytical solution is given in [Schmid & Podladchikov, 2003](https://academic.oup.com/gji/article/155/1/269/713923).
 
 <!-- ![](/images/SOLVI_Julia.png) -->
 <center><img src="/images/SOLVI_Julia.png" alt="drawing" width="500"/></center>
 
 # Power-law Stokes flow + advection
 
-The script [Mechanics_v11_MultiLayerExt.jl](./Mechanics_v11_MultiLayerExt.jl) allows to model multi-layer necking instabilities:
+The script [Mechanics_v11_MultiLayerExt.jl](./Mechanics_v11_MultiLayerExt.jl) allows to model multi-layer necking instabilities. See [Duretz & Schmalholz, 2015](https://pubs.geoscienceworld.org/gsa/geology/article-abstract/43/8/711/131951/From-symmetric-necking-to-localized-asymmetric?redirectedFrom=fulltext) for more details.
 
 ![](/images/MLPS_Julia.png)
 
