@@ -30,7 +30,7 @@ With [Mechanics_v11_PeriodicSimpleShear.jl](./Mechanics_v11_PeriodicSimpleShear.
 &#8594; Pressure build-up
 
 This can be reproduced with [Mechanics_v11_CompressibleLayer.jl](./Mechanics_v11_CompressibleLayer.jl)
-See the paper of [Moulas et al., 2018] (https://onlinelibrary.wiley.com/doi/abs/10.1111/jmg.12446) for more details.
+See the paper of [Moulas et al., 2018] (https://onlinelibrary.wiley.com/doi/abs/10.1111/jmg.12446 "Moulas et al., 2018") for more details.
 
 <!-- ![](/images/CompressibleLayer.gif) -->
 <center><img src="/images/CompressibleLayer.gif" alt="drawing" width="600"/></center>
