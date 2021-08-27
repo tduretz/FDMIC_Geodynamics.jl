@@ -25,6 +25,10 @@ With [Mechanics_v11_PeriodicSimpleShear.jl](./Mechanics_v11_PeriodicSimpleShear.
 <!-- ![](/images/PeriodicSimpleShear.gif) -->
 <center><img src="/images/PeriodicSimpleShear.gif" alt="drawing" width="600"/></center>
 
-# Compressible layer under layer parallel compression: pressure build-up
+# Compressible layer under layer parallel compression
+
+&#8594; Pressure build-up
 
 <!-- ![](/images/CompressibleLayer.gif) -->
+<center><img src="/images/CompressibleLayer.gif" alt="drawing" width="600"/></center>
+
