@@ -62,7 +62,9 @@ export Rheology!
     params.ALE       = 0     # Deform box 
     params.comp      = 0     # Compressible
     # Solver
-    params.solver    = 1     # 0: coupled --- 1: decoupled 
+    #------------------------ PINNED PRESSURE
+    params.solver    =-1     # -1: coupled with pinned P, 0: coupled with slight compressibility --- 1: decoupled Powell-Hestenes --- 2: decoupled KSP GCR
+    #------------------------ PINNED PRESSURE
     params.gamma     = 1e4   # Penalty factor
     params.Dir_scale = 1.0   # Dirichlet scaling factor
     # Non-linear iterations 
@@ -180,6 +182,27 @@ export Rheology!
     end 
     path = string( "./", viz_directory, "/" ) 
     anim = Plots.Animation( path, String[] ) 
+    # Postprocessing
+    Pca       = zeros(Float64, ncx+0, ncy+0)
+    Vxca      = zeros(Float64, ncx+0, ncy+0)
+    Vyca      = zeros(Float64, ncx+0, ncy+0)
+    #------------------------ PINNED PRESSURE
+    # Evaluate analytical solution on centroids (moved it before such that pinned pressure can be taken from Pca)
+    for i=1:size(Pca,1)
+        for j=1:size(Pca,2)
+            x  = domain.xc[i]
+            y  = domain.yc[j]
+            in = sqrt(x^2.0 + y^2.0) <= (params.user[1])
+            pa        = SolutionFields_p(materials.eta0[1], materials.eta0[2], params.user[1], params.Ebg, 0.0, x, y, in)
+            vxa, vya  = SolutionFields_v(materials.eta0[1], materials.eta0[2], params.user[1], params.Ebg, 0.0, x, y, in)
+            Pca[i,j]  = pa
+            Vxca[i,j] = vxa
+            Vyca[i,j] = vya
+        end
+    end
+    # Set pinned pressure
+    fields.Pc[1,1] = Pca[1,1]
+    #------------------------ PINNED PRESSURE
     # TIME LOOP
     for it=1:params.nt
         @printf("-------------------------------------\n")
@@ -252,23 +275,6 @@ export Rheology!
                 dx, dy = PureShearBoxUpdate!( domain, BC, params )
                 SetInitialVelocity2!( fields.Vx, fields.Vy, BC, domain )
             end
-        end
-    end
-    # Postprocessing
-    Pca       = zeros(Float64, ncx+0, ncy+0)
-    Vxca      = zeros(Float64, ncx+0, ncy+0)
-    Vyca      = zeros(Float64, ncx+0, ncy+0)
-    # Evaluate analytical solution on centroids
-    for i=1:size(Pca,1)
-        for j=1:size(Pca,2)
-            x  = domain.xc[i]
-            y  = domain.yc[j]
-            in = sqrt(x^2.0 + y^2.0) <= (params.user[1])
-            pa        = SolutionFields_p(materials.eta0[1], materials.eta0[2], params.user[1], params.Ebg, 0.0, x, y, in)
-            vxa, vya  = SolutionFields_v(materials.eta0[1], materials.eta0[2], params.user[1], params.Ebg, 0.0, x, y, in)
-            Pca[i,j]  = pa
-            Vxca[i,j] = vxa
-            Vyca[i,j] = vya
         end
     end
     # Errors
