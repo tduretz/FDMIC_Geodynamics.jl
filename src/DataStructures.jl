@@ -21,14 +21,15 @@ export Markers
 ##############
 
 Base.@kwdef mutable struct Thermal_BC
-    type_W  ::Union{Int64, Missing} = 1 # Defautl Dirichlet
-    type_E  ::Union{Int64, Missing} = 1 # Defautl Dirichlet
-    type_S  ::Union{Int64, Missing} = 1 # Defautl Dirichlet
-    type_N  ::Union{Int64, Missing} = 1 # Defautl Dirichlet
+    type_W  ::Union{Int64, Missing} = 1 # Default Dirichlet
+    type_E  ::Union{Int64, Missing} = 1 # Default Dirichlet
+    type_S  ::Union{Int64, Missing} = 1 # Default Dirichlet
+    type_N  ::Union{Int64, Missing} = 1 # Default Dirichlet
     Dir_W   ::Union{Vector{Float64}, Missing} = missing
     Dir_E   ::Union{Vector{Float64}, Missing} = missing
     Dir_S   ::Union{Vector{Float64}, Missing} = missing
     Dir_N   ::Union{Vector{Float64}, Missing} = missing
+    Pinned  ::Union{Matrix{Int64}, Missing}   = missing
 end
 export Thermal_BC
 
@@ -88,6 +89,9 @@ Base.@kwdef mutable struct MaterialParameters
     # Elasticity
     K    :: Union{Vector{Float64}, Missing} = missing
     G    :: Union{Vector{Float64}, Missing} = missing
+    # Phase field damage
+    l0   :: Union{Vector{Float64}, Missing} = missing
+    Gc   :: Union{Vector{Float64}, Missing} = missing
 end
 export MaterialParameters
 
@@ -130,6 +134,10 @@ Base.@kwdef mutable struct Fields2D
     etac      :: Union{Matrix{Float64}, Missing} = missing
     etav      :: Union{Matrix{Float64}, Missing} = missing
     Kc        :: Union{Matrix{Float64}, Missing} = missing
+    Gc        :: Union{Matrix{Float64}, Missing} = missing
+    Gv        :: Union{Matrix{Float64}, Missing} = missing
+    We        :: Union{Matrix{Float64}, Missing} = missing
+    We0       :: Union{Matrix{Float64}, Missing} = missing
     rhoc      :: Union{Matrix{Float64}, Missing} = missing
     Pc0       :: Union{Matrix{Float64}, Missing} = missing
     Pc        :: Union{Matrix{Float64}, Missing} = missing
@@ -141,6 +149,11 @@ Base.@kwdef mutable struct Fields2D
     Fx        :: Union{Matrix{Float64}, Missing} = missing
     Fy        :: Union{Matrix{Float64}, Missing} = missing
     Fp        :: Union{Matrix{Float64}, Missing} = missing
+    FDam      :: Union{Matrix{Float64}, Missing} = missing
+    Damc      :: Union{Matrix{Float64}, Missing} = missing
+    phiDam    :: Union{Matrix{Float64}, Missing} = missing
+    GDam      :: Union{Matrix{Float64}, Missing} = missing
+    lDam      :: Union{Matrix{Float64}, Missing} = missing
     #####
     NumVx     :: Union{Matrix{Int64}, Missing} = missing
     NumVy     :: Union{Matrix{Int64}, Missing} = missing
@@ -158,7 +171,7 @@ export Fields2D
 Base.@kwdef mutable struct CharScales 
     L      :: Union{Float64, Missing}   = missing
     t      :: Union{Float64, Missing}   = missing
-    m      :: Union{Float64, Missing}   = missing
+    S      :: Union{Float64, Missing}   = missing
     T      :: Union{Float64, Missing}   = missing
 end
 export CharScales

@@ -12,4 +12,5 @@ include("MechanicsSolvers.jl")
 include("MarkerRoutines.jl")
 include("GridRoutines.jl")
 include("SparseRoutines.jl")
+include("DamageRoutines.jl")
 end

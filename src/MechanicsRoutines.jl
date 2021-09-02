@@ -12,7 +12,6 @@
     @tturbo Eps.zz .= .-(Eps.xx .+ Eps.yy)
     @tturbo Eps.xy .= 0.5.*( diff(Vx,dims=2)./dy .+ diff(Vy,dims=1)/dx ) 
     VerticesToCentroids!( Eps.xy_c, Eps.xy )
-    # Eps.xy_c     .= 0.25*(Eps.xy[1:end-1,1:end-1] .+ Eps.xy[1:end-1,2:end-0] .+ Eps.xy[2:end-0,1:end-1] .+ Eps.xy[2:end-0,2:end-0])
     @tturbo Eps.II .= sqrt.(0.5*(Eps.xx.^2 .+ Eps.xx.^2 .+ Eps.zz.^2) .+ Eps.xy_c.^2)
 end
 export StrainRate!
@@ -25,11 +24,48 @@ export StrainRate!
     @tturbo Tau.zz .= 2.0.*f.etac.*Eps.zz  
     @tturbo Tau.xy .= 2.0.*f.etav.*Eps.xy 
     VerticesToCentroids!( Tau.xy_c, Tau.xy )
-    # Tau.xy_c     .= 0.25*(Tau.xy[1:end-1,1:end-1] .+ Tau.xy[1:end-1,2:end-0] .+ Tau.xy[2:end-0,1:end-1] .+ Tau.xy[2:end-0,2:end-0])
     @tturbo Tau.II .= sqrt.(0.5*(Tau.xx.^2 .+ Tau.xx.^2 .+ Tau.zz.^2) .+ Tau.xy_c.^2)
 end
 export Stress!
 
+########
+
+@views function StressVE!( Tau::Tensor2D, Tau0::Tensor2D, Eps::Tensor2D, f::Fields2D, dt::Float64 )
+    @tturbo Tau.xx .= 2f.etac.* ( Eps.xx .+ Tau0.xx ./ ( 2f.Gc.*dt ) ) 
+    @tturbo Tau.yy .= 2f.etac.* ( Eps.yy .+ Tau0.yy ./ ( 2f.Gc.*dt ) ) 
+    @tturbo Tau.zz .= 2f.etac.* ( Eps.zz .+ Tau0.zz ./ ( 2f.Gc.*dt ) ) 
+    @tturbo Tau.xy .= 2f.etav.* ( Eps.xy .+ Tau0.xy ./ ( 2f.Gv.*dt ) ) 
+    VerticesToCentroids!( Tau.xy_c, Tau.xy )
+    @tturbo Tau.II .= sqrt.(0.5*(Tau.xx.^2 .+ Tau.xx.^2 .+ Tau.zz.^2) .+ Tau.xy_c.^2)
+end
+export StressVE!
+
+########
+function StrainEnergy!( We::Matrix{Float64}, Tau::Tensor2D, Eps::Tensor2D, Str0::Tensor2D, Str::Tensor2D, P::Matrix{Float64}, dt::Float64, f::Fields2D, dx::Float64, dy::Float64 )
+    Str.xx   .= Str0.xx   .+ dt.*(Eps.xx .+ 1.0/3.0.*Eps.div)
+    Str.yy   .= Str0.yy   .+ dt.*(Eps.yy .+ 1.0/3.0.*Eps.div)
+    Str.zz   .= Str0.zz   .+ dt.*(Eps.zz .+ 1.0/3.0.*Eps.div)
+    Str.xy_c .= Str0.xy_c .+ dt.*(Eps.xy_c)
+    @tturbo Str.II .= sqrt.(0.5*(Str.xx.^2 .+ Str.xx.^2 .+ Str.zz.^2) .+ Str.xy_c.^2)
+    We  .= (Tau.xx .- P) .* Str.xx .+ (Tau.yy .- P) .* Str.yy .+ (Tau.zz .- P) .* Str.zz .+ 2.0.*Tau.xy_c .* Str.xy_c
+    We .*= 0.5  
+    We ./= f.Damc
+    # We[f.We0.>We] .= f.We0[f.We0.>We]
+
+    # Exx = diff(f.Vx[:,2:end-1],dims=1)./dx * dt
+    # Eyy = diff(f.Vy[2:end-1,:],dims=2)./dy * dt
+    # Exyv = 0.5.*( diff(f.Vx,dims=2)./dy .+ diff(f.Vy,dims=1)/dx ) * dt  
+    # Exyc = zeros(Float64, size(Exx))
+    # VerticesToCentroids!( Exyc, Exyv )
+
+    # Sxx = (f.Kc.+4.0./3.0*f.Gc).*Exx + (f.Kc.-2.0./3.0*f.Gc).*Eyy
+    # Syy = (f.Kc.-2.0./3.0*f.Gc).*Exx + (f.Kc.+4.0./3.0*f.Gc).*Eyy
+    # Szz = (f.Kc.-4.0./3.0*f.Gc).*Exx + (f.Kc.-2.0./3.0*f.Gc).*Eyy
+    # Sxy = 2.0*f.Gc.*Exyc
+
+    # We .= 2.0*Sxy.*Exyc .+ Sxx.*Exx .+ Syy.*Eyy
+end
+export StrainEnergy!
 ########
 
 @views function Residuals!( f::Fields2D, Tau::Tensor2D, Eps::Tensor2D, BC::BoundaryConditions, dom::ModelDomain, params::ModelParameters )
@@ -54,6 +90,9 @@ export Stress!
     # end
 end
 export Residuals!
+
+########
+
 @views function ResidualsComp!( f::Fields2D, Tau::Tensor2D, Eps::Tensor2D, BC::BoundaryConditions, dom::ModelDomain, params::ModelParameters )
     dx, dy, ncx, ncy = dom.dx, dom.dy, dom.ncx, dom.ncy 
     @tturbo f.Fx .= 0.0

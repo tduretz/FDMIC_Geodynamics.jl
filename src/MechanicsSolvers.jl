@@ -10,13 +10,38 @@
     fu[1:length(f.Fx)]     .= f.Fx[:]
     fu[length(f.Fx)+1:end] .= f.Fy[:]
     fp .= f.Fp[:]
-    if params.solver == 0
+    #------------------------ PINNED PRESSURE
+    if params.solver == -1
+        # Pinned pressure case
+        # Slightly compressible pressure block
+        print("Pinned pressure")
+        cP   = zeros(Float64,size(f.etac,1), size(f.etac,2))
+        cP[1,1] = 1.0
+        Kpu[1,:] .= 0.0
+        f.Pc[1,1] = 0.0
+        I    = f.NumP[:]
+        J    = f.NumP[:]
+        V    = cP[:]
+        PP   = sparse( I, J, V)
+        Kmat = [Kuu Kup; Kpu PP]
+        F    = [fu; fp]
+        dX   = Kmat\F
+        println(size(f.Vx))
+        println(size(f.NumVx))
+        dVx = dX[ f.NumVx ]
+        println( size(f.Vx[:,2:end-1]) )
+        f.Vx[:,2:end-1] .= f.Vx[:,2:end-1] .+ dX[f.NumVx]
+        f.Vy[2:end-1,:] .= f.Vy[2:end-1,:] .+ dX[f.NumVy] 
+        f.Pc            .= f.Pc            .+ dX[f.NumP.+maximum(f.NumVy)]
+        f.Pc            .-= mean(f.Pc)
+    elseif params.solver == 0
+        #------------------------ PINNED PRESSURE
         # Slightly compressible pressure block
         if params.comp==1
-            print("The solver accounts for compressibility")
+            print("The solver accounts for physical compressibility")
             cP   = 1.0./(f.Kc.*params.dt).*ones(Float64,size(f.etac,1), size(f.etac,2))
         else
-            print("The solver does not account for compressibility")
+            print("The solver does not account for physical compressibility (artificial only)")
             cP   = 1.0./params.gamma.*ones(Float64,size(f.etac,1), size(f.etac,2))
         end
         I    = f.NumP[:]
@@ -33,7 +58,7 @@
         f.Vx[:,2:end-1] .= f.Vx[:,2:end-1] .+ dX[f.NumVx]
         f.Vy[2:end-1,:] .= f.Vy[2:end-1,:] .+ dX[f.NumVy] 
         f.Pc            .= f.Pc            .+ dX[f.NumP.+maximum(f.NumVy)]
-        f.Pc            .-= mean(f.Pc)
+        if params.comp==0 f.Pc            .-= mean(f.Pc) end
     elseif params.solver == 1
         DecoupledSolver!( f, params, fu, fp, Kuu, Kup, Kpu )
     elseif params.solver == 2 

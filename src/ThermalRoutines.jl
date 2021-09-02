@@ -29,8 +29,8 @@
     cC     =  (steady!=1) .* Cp.*rho./dt .+ fN.*kN./dy^2 .+ fS.*kS./dy^2 .+ fE.*kE./dx^2 .+ fW.*kW./dx^2
     cW     = -kW./dx^2; cW[BCW.!=0] .= 0.0
     cE     = -kE./dx^2; cE[BCE.!=0] .= 0.0       
-    cS     = -kS./dx^2; cS[BCS.!=0] .= 0.0  
-    cN     = -kN./dx^2; cN[BCN.!=0] .= 0.0  
+    cS     = -kS./dy^2; cS[BCS.!=0] .= 0.0  
+    cN     = -kN./dy^2; cN[BCN.!=0] .= 0.0  
     
     # # Matrix coeffcients
     # cC        = zeros(size(Num))
@@ -87,7 +87,7 @@ export ThermalSolve!
 ##############
 
 function ThermalResidual(T, T0, rho, Cp, H, kx, ky, dx, dy, dt, steady, Th_BC, ncx, ncy)
-    """ Thermal residuals """
+    """ Thermal residual """
     Tex = zeros(ncx+2, ncy+2)
     Tex[2:end-1,2:end-1] .= T
     Tex[  1,2:end-1]     .= (Th_BC.type_W==0) * T[end,:] .+ (Th_BC.type_W==2) * T[  1,:] .+ (Th_BC.type_W==1) * (2.0*Th_BC.Dir_W[:] - T[  1,:])
