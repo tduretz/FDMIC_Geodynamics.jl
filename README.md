@@ -35,7 +35,7 @@ See the paper of [Moulas et al. (2018)](https://onlinelibrary.wiley.com/doi/abs/
 <!-- ![](/images/CompressibleLayer.gif) -->
 <center><img src="/images/CompressibleLayer.gif" alt="drawing" width="600"/></center>
 
-# Fracture propagation using damage rheology and phase-field approach
+# Crack propagation using damage rheology and phase-field approach
 
 The "benchmark" test presented in [Miehe et al. (2010)](http://www.crm.sns.it/media/course/3060/miehe%2Bhofacker%2Bwelschinger10.pdf) can be reproduced with [Mechanics_v11_ElasticDamage_v1.jl](./Mechanics_v11_ElasticDamage_v1.jl).
 
