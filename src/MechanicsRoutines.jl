@@ -36,7 +36,7 @@ export Stress!
     @tturbo Tau.zz .= 2f.etac.* ( Eps.zz .+ Tau0.zz ./ ( 2f.Gc.*dt ) ) 
     @tturbo Tau.xy .= 2f.etav.* ( Eps.xy .+ Tau0.xy ./ ( 2f.Gv.*dt ) ) 
     VerticesToCentroids!( Tau.xy_c, Tau.xy )
-    @tturbo Tau.II .= sqrt.(0.5*(Tau.xx.^2 .+ Tau.xx.^2 .+ Tau.zz.^2) .+ Tau.xy_c.^2)
+    @tturbo Tau.II .= sqrt.(0.5*((f.Damc.*Tau.xx).^2 .+ (f.Damc.*Tau.yy).^2 .+ (f.Damc.*Tau.zz).^2) .+ (f.Damc.*Tau.xy_c).^2)
 end
 export StressVE!
 
@@ -49,8 +49,8 @@ function StrainEnergy!( We::Matrix{Float64}, Tau::Tensor2D, Eps::Tensor2D, Str0:
     @tturbo Str.II .= sqrt.(0.5*(Str.xx.^2 .+ Str.xx.^2 .+ Str.zz.^2) .+ Str.xy_c.^2)
     We  .= (Tau.xx .- P) .* Str.xx .+ (Tau.yy .- P) .* Str.yy .+ (Tau.zz .- P) .* Str.zz .+ 2.0.*Tau.xy_c .* Str.xy_c
     We .*= 0.5  
-    We ./= f.Damc
-    # We[f.We0.>We] .= f.We0[f.We0.>We]
+    # We ./= f.Damc
+    We[f.We0.>We] .= f.We0[f.We0.>We]
 
     # Exx = diff(f.Vx[:,2:end-1],dims=1)./dx * dt
     # Eyy = diff(f.Vy[2:end-1,:],dims=2)./dy * dt
@@ -118,6 +118,31 @@ export ResidualsComp!
 
 ########
 
+@views function ResidualsCompDam!( f::Fields2D, Tau::Tensor2D, Eps::Tensor2D, BC::BoundaryConditions, dom::ModelDomain, params::ModelParameters )
+    dx, dy, ncx, ncy = dom.dx, dom.dy, dom.ncx, dom.ncy 
+    @tturbo f.Fx .= 0.0
+    @tturbo f.Fy .= 0.0
+    @tturbo f.Fp .= 0.0
+    if BC.periodix==0
+        f.Fx[2:end-1,:] .= ( diff(f.Damc.*(Tau.xx .- f.Pc), dims=1)./dx .+ diff(f.Damv[2:end-1,:].*Tau.xy[2:end-1,:], dims=2)/dy )
+    else
+        Sxx_ex             = zeros(ncx+1,ncy)
+        @tturbo Sxx_ex[2:end-0,:] .= -f.Pc .+ Tau.xx
+        Sxx_ex[      1,:] .= -f.Pc[end,:] .+ Tau.xx[end,:]
+        #Sxx_ex[    end,:] .= -Pc[  1,:] .+ Tau.xx[  1,:] # Do not assemble last column
+        f.Fx .= ( diff(Sxx_ex, dims=1)./dx .+ diff(Tau.xy[1:end-1,:], dims=2)/dy )
+    end
+    f.Fy[:,2:end-1] .= ( diff(f.Damc.*(Tau.yy .- f.Pc), dims=2)./dy .+ diff(f.Damv[:,2:end-1].*Tau.xy[:,2:end-1], dims=1)/dx )
+    if params.comp == 1
+        @tturbo f.Fp .= -Eps.div .- (f.Pc .- f.Pc0) ./ (f.Kc.*params.dt)
+    else
+        @tturbo f.Fp .= -Eps.div
+    end
+end
+export ResidualsCompDam!
+
+########
+
 @views function SetBCs( Vx::Matrix{Float64}, Vy::Matrix{Float64}, BC::BoundaryConditions )
     # Boundaries
     if BC.Vx.type_S == 22 Vx[:,  1] .= Vx[:,    2] end
@@ -161,7 +186,7 @@ export NumberingStokes!
     ncx, ncy = dom.ncx, dom.ncy
     dx, dy = dom.dx, dom.dy
     NumVx, NumVy, NumP = f.NumVx, f.NumVy, f.NumP
-    etac, etav = f.etac, f.etav
+    etac, etav = f.Damc.*f.etac, f.Damv.*f.etav
 
     if BC.periodix==0
         nxvx = ncx+1
@@ -191,7 +216,12 @@ export NumberingStokes!
     etaS      = zeros(Float64, nxvx, ncy); etaS[:,1:end-0] = etav[:,1:end-1] 
     etaN      = zeros(Float64, nxvx, ncy); etaN[:,1:end-0] = etav[:,2:end-0]
 
+    DamW =  ones(Float64, size(NumVx)); DamW[2:end-0,:]   .= f.Damc
+    DamE =  ones(Float64, size(NumVx)); DamE[1:end-1,:]   .= f.Damc
+
     if BC.periodix==1
+        DamW[  1,:] = Damc[end,:]
+        DamE[end,:] = Damc[1,:]
         etaW[  1,:] = etac[end,:]
         etaE[end,:] = etac[1,:]
         iVxW[  1,:] = NumVx[end-1,:]
@@ -214,8 +244,8 @@ export NumberingStokes!
     @tturbo cVySE = -2/3*etaE./(dx.*dy) + 1.0*etaS./(dx.*dy)
     @tturbo cVyNW = 1.0*etaN./(dx.*dy) - 2/3*etaW./(dx.*dy)
     @tturbo cVyNE = 2/3*etaE./(dx.*dy) - 1.0*etaN./(dx.*dy)
-    @tturbo cPW   = -1.0/dx .*  ones(Float64, nxvx, ncy)
-    @tturbo cPE   =  1.0/dx .*  ones(Float64, nxvx, ncy)
+    @tturbo cPW   = -DamW./dx .*  ones(Float64, nxvx, ncy)
+    @tturbo cPE   =  DamE./dx .*  ones(Float64, nxvx, ncy)
 
     if BC.Vx.type_S==11
         cVxC[:,  1] .-= cVxS[:,  1]
@@ -292,8 +322,10 @@ export NumberingStokes!
     @tturbo cVxSE = 1.0*etaE./(dx.*dy) - 2/3*etaS./(dx.*dy)
     @tturbo cVxNW = -2/3*etaN./(dx.*dy) + 1.0*etaW./(dx.*dy)
     @tturbo cVxNE = -1.0*etaE./(dx.*dy) + 2/3*etaN./(dx.*dy)
-    @tturbo cPS   = -1.0/dy .* ones(size(NumVy)); cPS[:,  1] .= 0.0;  cPS[:,end] .= 0.0
-    @tturbo cPN   =  1.0/dy .* ones(size(NumVy)); cPN[:,  1] .= 0.0;  cPN[:,end] .= 0.0
+    DamS =  ones(Float64, size(NumVy)); DamS[:,2:end-0]   .= f.Damc
+    DamN =  ones(Float64, size(NumVy)); DamN[:,1:end-1]   .= f.Damc
+    @tturbo cPS   = -DamS./dy .* ones(size(NumVy)); cPS[:,  1] .= 0.0;  cPS[:,end] .= 0.0
+    @tturbo cPN   =  DamN./dy .* ones(size(NumVy)); cPN[:,  1] .= 0.0;  cPN[:,end] .= 0.0
 
     if BC.periodix==0
         if BC.Vy.type_W==11

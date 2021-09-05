@@ -90,8 +90,12 @@ Base.@kwdef mutable struct MaterialParameters
     K    :: Union{Vector{Float64}, Missing} = missing
     G    :: Union{Vector{Float64}, Missing} = missing
     # Phase field damage
-    l0   :: Union{Vector{Float64}, Missing} = missing
-    Gc   :: Union{Vector{Float64}, Missing} = missing
+    # lDam :: Union{Vector{Float64}, Missing} = missing
+    # gDam :: Union{Vector{Float64}, Missing} = missing
+    # eDam :: Union{Vector{Float64}, Missing} = missing
+    lDam :: Union{Float64, Missing} = missing
+    gDam :: Union{Float64, Missing} = missing
+    eDam :: Union{Float64, Missing} = missing
 end
 export MaterialParameters
 
@@ -151,7 +155,9 @@ Base.@kwdef mutable struct Fields2D
     Fp        :: Union{Matrix{Float64}, Missing} = missing
     FDam      :: Union{Matrix{Float64}, Missing} = missing
     Damc      :: Union{Matrix{Float64}, Missing} = missing
+    Damv      :: Union{Matrix{Float64}, Missing} = missing
     phiDam    :: Union{Matrix{Float64}, Missing} = missing
+    phiDam0   :: Union{Matrix{Float64}, Missing} = missing
     GDam      :: Union{Matrix{Float64}, Missing} = missing
     lDam      :: Union{Matrix{Float64}, Missing} = missing
     #####

@@ -1,6 +1,6 @@
 ##############
 
-@views function DamageAssembly( f::Fields2D, Th_BC::Thermal_BC, dom::ModelDomain )
+@views function DamageAssembly( f::Fields2D, Th_BC::Thermal_BC, dom::ModelDomain, mat::MaterialParameters, dt::Float64 )
     ncx, ncy, dx, dy = dom.ncx, dom.ncy, dom.dx, dom.dy
     Num       = reshape(1:ncx*ncy,ncx,ncy)
     iC        = Num
@@ -33,8 +33,7 @@
     fE     = 1.0 .+ 1.0.*(BCE.==1) .- 1.0.*(BCE.==2)
     fS     = 1.0 .+ 1.0.*(BCS.==1) .- 1.0.*(BCS.==2)
     fN     = 1.0 .+ 1.0.*(BCN.==1) .- 1.0.*(BCN.==2)
-    cC     =  fN.*kN./dy^2 .+ fS.*kS./dy^2 .+ fE.*kE./dx^2 .+ fW.*kW./dx^2 .+ ( 2*f.We ./ (f.GDam .* f.lDam) .+  1.0 ./f.lDam.^2 )
-    # cC     =  fN.*kN./dy^2 .+ fS.*kS./dy^2 .+ fE.*kE./dx^2 .+ fW.*kW./dx^2 .+ (f.GDam ./ f.lDam .+ 2f.We) ./ (f.GDam .* f.lDam)
+    cC     =  fN.*kN./dy^2 .+ fS.*kS./dy^2 .+ fE.*kE./dx^2 .+ fW.*kW./dx^2 .+ ( 2*f.We ./ (mat.gDam * mat.lDam) .+  1.0 ./mat.lDam^2 .+ mat.eDam ./ (dt.*mat.gDam * mat.lDam))
     cW     = -kW./dx^2; cW[BCW.!=0] .= 0.0
     cE     = -kE./dx^2; cE[BCE.!=0] .= 0.0       
     cS     = -kS./dy^2; cS[BCS.!=0] .= 0.0  
@@ -58,7 +57,7 @@ export DamageAssembly
 
 ##############
 
-function DamageResidual!( f::Fields2D, Th_BC::Thermal_BC, dom::ModelDomain)
+function DamageResidual!( f::Fields2D, Th_BC::Thermal_BC, dom::ModelDomain, mat::MaterialParameters, dt::Float64 )
     """ Damage residual """
     ncx, ncy, dx, dy = dom.ncx, dom.ncy, dom.dx, dom.dy
     T = f.phiDam
@@ -77,7 +76,7 @@ function DamageResidual!( f::Fields2D, Th_BC::Thermal_BC, dom::ModelDomain)
             qE = (Tex[i+2,j+1] - Tex[i+1,j+1])/dx
             qS = (Tex[i+1,j+1] - Tex[i+1,j+0])/dy
             qN = (Tex[i+1,j+2] - Tex[i+1,j+1])/dy
-            f.FDam[i,j] =  (pinned==0) * ( f.phiDam[i,j] * ( 2*f.We[i,j] / (f.GDam[i,j]*f.lDam[i,j]) +  1.0/f.lDam[i,j]^2 ) - 2.0*f.We[i,j] / (f.GDam[i,j]*f.lDam[i,j]) - ( (qE-qW)/dx + (qN-qS)/dy ) ) + (pinned==1) * 0.0
+            f.FDam[i,j] =  (pinned==0) * ( f.phiDam[i,j] * ( 2*f.We[i,j] / (mat.gDam*mat.lDam) +  1.0/mat.lDam^2 ) - 2.0*f.We[i,j] / (mat.gDam*mat.lDam) + mat.eDam*(f.phiDam[i,j]-f.phiDam0[i,j]) / (dt*mat.gDam*mat.lDam) - ( (qE-qW)/dx + (qN-qS)/dy ) ) + (pinned==1) * 0.0
 
             # f.FDam[i,j] =  1.0/(f.GDam[i,j]*f.lDam[i,j]) * (-2f.We[i,j] + ( f.GDam[i,j]/f.lDam[i,j] + 2f.We[i,j] )*f.phiDam[i,j]) - ( (qE-qW)/dx + (qN-qS)/dy ) 
         end
@@ -90,7 +89,7 @@ export DamageResidual!
 
 ##############
 
-@views function InitialDamageAssembly( f::Fields2D, Th_BC::Thermal_BC, dom::ModelDomain )
+@views function InitialDamageAssembly( f::Fields2D, Th_BC::Thermal_BC, dom::ModelDomain, mat::MaterialParameters )
     ncx, ncy, dx, dy = dom.ncx, dom.ncy, dom.dx, dom.dy
     Num       = reshape(1:ncx*ncy,ncx,ncy)
     iC        = Num
@@ -123,7 +122,7 @@ export DamageResidual!
     fE     = 1.0 .+ 1.0.*(BCE.==1) .- 1.0.*(BCE.==2)
     fS     = 1.0 .+ 1.0.*(BCS.==1) .- 1.0.*(BCS.==2)
     fN     = 1.0 .+ 1.0.*(BCN.==1) .- 1.0.*(BCN.==2)
-    cC     =  fN.*kN./dy^2 .+ fS.*kS./dy^2 .+ fE.*kE./dx^2 .+ fW.*kW./dx^2 .+ 1.0 ./ f.lDam.^2
+    cC     =  fN.*kN./dy^2 .+ fS.*kS./dy^2 .+ fE.*kE./dx^2 .+ fW.*kW./dx^2 .+ 1.0 / mat.lDam^2
     cW     = -kW./dx^2; cW[BCW.!=0] .= 0.0
     cE     = -kE./dx^2; cE[BCE.!=0] .= 0.0       
     cS     = -kS./dy^2; cS[BCS.!=0] .= 0.0  
@@ -147,7 +146,7 @@ export InitialDamageAssembly
 
 ##############
 
-function InitialDamageResidual!( f::Fields2D, Th_BC::Thermal_BC, dom::ModelDomain)
+function InitialDamageResidual!( f::Fields2D, Th_BC::Thermal_BC, dom::ModelDomain, mat::MaterialParameters )
     """ Damage residual """
     ncx, ncy, dx, dy = dom.ncx, dom.ncy, dom.dx, dom.dy
     T = f.phiDam
@@ -166,7 +165,7 @@ function InitialDamageResidual!( f::Fields2D, Th_BC::Thermal_BC, dom::ModelDomai
             qE = (Tex[i+2,j+1] - Tex[i+1,j+1])/dx
             qS = (Tex[i+1,j+1] - Tex[i+1,j+0])/dy
             qN = (Tex[i+1,j+2] - Tex[i+1,j+1])/dy
-            f.FDam[i,j] = (pinned==0) * ( f.phiDam[i,j] / f.lDam[i,j]^2 - ( (qE-qW)/dx + (qN-qS)/dy ) ) + (pinned==1) * 0.0
+            f.FDam[i,j] = (pinned==0) * ( f.phiDam[i,j] / mat.lDam[i,j]^2 - ( (qE-qW)/dx + (qN-qS)/dy ) ) + (pinned==1) * 0.0
         end
     end
 end

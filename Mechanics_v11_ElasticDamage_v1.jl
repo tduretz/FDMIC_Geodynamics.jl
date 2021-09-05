@@ -25,20 +25,16 @@ function Rheology!( f, Eps, Tau, params, materials, BC, ncx, ncy )
     f.etac .= 0.0
     f.Kc   .= 0.0
     f.Gc   .= 0.0
-    f.GDam .= 0.0
-    f.lDam .= 0.0
+    # f.GDam .= 0.0
+    # f.lDam .= 0.0
     for m=1:materials.nphase
         @tturbo eta    = materials.G[m]*params.dt
         @tturbo f.etac .+= f.phase_perc[m,:,:] .* eta           
         @tturbo f.Kc   .+= f.phase_perc[m,:,:] .* materials.K[m]
         @tturbo f.Gc   .+= f.phase_perc[m,:,:] .* materials.G[m] 
-        @tturbo f.GDam .+= f.phase_perc[m,:,:] .* materials.Gc[m] 
-        @tturbo f.lDam .+= f.phase_perc[m,:,:] .* materials.l0[m]
+        # @tturbo f.GDam .+= f.phase_perc[m,:,:] .* materials.Gc[m] 
+        # @tturbo f.lDam .+= f.phase_perc[m,:,:] .* materials.l0[m]
     end
-    # Damage
-    f.etac .*= f.Damc
-    f.Kc   .*= f.Damc
-    f.Gc   .*= f.Damc
     @time CentroidsToVertices!( f.etav, f.etac, ncx, ncy, BC )
     @time CentroidsToVertices!( f.Gv,   f.Gc,   ncx, ncy, BC )
     println("min Eii: ", minimum(Eps.II), " --- max Eii: ", maximum(Eps.II))
@@ -69,12 +65,12 @@ export Rheology!
     scale.t          = 1.0/abs(params.Ebg)  
     scale.S          = 1e7    
     # Spatial discretisation
-    ncx              = 100;  domain.ncx = ncx
-    ncy              = 100;  domain.ncy = ncy
+    ncx              = 150;  domain.ncx = ncx
+    ncy              = 150;  domain.ncy = ncy
     # Time discretisation
     params.advection = 0
-    params.nt        = 1000
-    params.dt        = 10.0
+    params.nt        = 800
+    params.dt        = 5.0
     params.Courant   = 0.01  # Courant number
     params.dt_var    = 0     # variable dt
     params.t         = 0.0   # time
@@ -87,7 +83,7 @@ export Rheology!
     params.gamma     = 1e8   # Penalty factor
     params.Dir_scale = 1.0   # Dirichlet scaling factor
     # Non-linear iterations 
-    params.niter_nl  = 100     # max. number of non-linear iterations
+    params.niter_nl  = 5    # max. number of non-linear iterations
     params.tol_nl    = 1e-4  # non-linear tolerance
     params.JFNK      = 0     # Jacobian-Free Newton_Krylov
     # Visualisation
@@ -104,40 +100,40 @@ export Rheology!
     materials.n       = zeros(Float64, materials.nphase)
     materials.G       = zeros(Float64, materials.nphase)
     materials.K       = zeros(Float64, materials.nphase)
-    materials.Gc      = zeros(Float64, materials.nphase)
-    materials.l0      = zeros(Float64, materials.nphase)
+    materials.gDam    = 2.70e3#zeros(Float64, materials.nphase)
+    materials.lDam    = 15.0e-6#zeros(Float64, materials.nphase)
+    materials.eDam    = 0.0#zeros(Float64, materials.nphase)
     # Material 1
     materials.Tref[1] = 1e-1  # reference flow stress
     materials.n[1]    = 1.0
     materials.K[1]    = 174.9e9
     materials.G[1]    = 80.77e9
-    materials.Gc[1]   = 2.7e3
-    materials.l0[1]   = 15.0e-6
+    # materials.gDam[1] = 2.70e3
+    # materials.lDam[1] = 15.0e-6
+    # materials.eDam[1] = 0.0
     materials.eta0[1] = materials.Tref[1] * (1.0/2.0) * abs(params.Ebg)^(-1.0/materials.n[1])  # matrix viscosity
-   # Material 2
-   materials.Tref[2] = 1     # reference flow stress
-   materials.n[2]    = 1.0
-   materials.K[2]    = 174.9e8
-   materials.G[2]    = 80.77e8
-   materials.Gc[2]   = 2.70e3
-   materials.l0[2]   = 15.0e-6
-   materials.eta0[2] = materials.Tref[2] * (1.0/2.0) * abs(params.Ebg)^(-1.0/materials.n[2]) # inclusion viscosity
-  
-
-   domain.xmin /= scale.L
-   domain.xmax /= scale.L
-   domain.ymin /= scale.L
-   domain.ymax /= scale.L
-   materials.Gc ./= (scale.S*scale.L) 
-   materials.G  ./= scale.S 
-   materials.K  ./= scale.S 
-   materials.l0 ./=  scale.L
-   params.Ebg  /= (1.0/scale.t)
-   params.dt   /= scale.t
-   params.user[1] /=  scale.L
-
-   displ = 0
-   
+    # Material 2
+    materials.Tref[2] = 1     # reference flow stress
+    materials.n[2]    = 1.0
+    materials.K[2]    = 174.9e8
+    materials.G[2]    = 80.77e8
+    # materials.gDam[2] = 2.70e3
+    # materials.lDam[2] = 15.0e-6
+    # materials.eDam[2] = 0.0
+    materials.eta0[2] = materials.Tref[2] * (1.0/2.0) * abs(params.Ebg)^(-1.0/materials.n[2]) # inclusion viscosity
+    # Scaling
+    domain.xmin     /= scale.L
+    domain.xmax     /= scale.L
+    domain.ymin     /= scale.L
+    domain.ymax     /= scale.L
+    materials.gDam /= (scale.S*scale.L) 
+    materials.eDam /= (scale.S*scale.t) 
+    materials.lDam /=  scale.L
+    materials.G    ./= scale.S 
+    materials.K    ./= scale.S 
+    params.Ebg      /= (1.0/scale.t)
+    params.dt       /= scale.t
+    params.user[1]  /=  scale.L
     # Initialize coordinates
     domain.L0 = domain.xmax-domain.xmin
     GenerateMesh!( domain )
@@ -209,10 +205,10 @@ export Rheology!
     fields.Fy        = zeros(Float64, ncx+0, ncy+1)
     fields.Fp        = zeros(Float64, ncx  , ncy  )
     fields.Damc      = zeros(Float64, ncx  , ncy  )
-    fields.phiDam    = zeros(Float64, ncx, ncy)
-    fields.GDam      = zeros(Float64, ncx  , ncy  )
-    fields.lDam      = zeros(Float64, ncx  , ncy  )
-    fields.FDam      = zeros(Float64, ncx, ncy)
+    fields.Damv      = zeros(Float64, ncx+1, ncy+1)
+    fields.phiDam    = zeros(Float64, ncx,   ncy  )
+    fields.phiDam0   = zeros(Float64, ncx,   ncy  )
+    fields.FDam      = zeros(Float64, ncx,   ncy  )
     # Number equations
     println("Numbering")
     @time NumberingStokes!( fields, BC, domain )
@@ -248,14 +244,12 @@ export Rheology!
     fields.phiDam[BC_Dam.Pinned.==1] .= 1.0
     @time CountMarkers3!( p, fields, materials, domain )
     @time Rheology!( fields, Eps, Tau, params, materials, BC, ncx, ncy )
-    InitialDamageResidual!( fields, BC_Dam, domain )
-    K_Dam = InitialDamageAssembly( fields, BC_Dam, domain )
+    InitialDamageResidual!( fields, BC_Dam, domain, materials )
+    K_Dam = InitialDamageAssembly( fields, BC_Dam, domain, materials )
     Kc    = cholesky(K_Dam)
     dd    = Kc\fields.FDam[:]
     fields.phiDam .-= dd[fields.NumP]
-    InitialDamageResidual!( fields, BC_Dam, domain )
-    # p1 = Plots.heatmap( domain.xc, domain.yc, Array(fields.phiDam )' )
-    # display( Plots.plot( p1 ) )
+    InitialDamageResidual!( fields, BC_Dam, domain, materials )
     # Visualisation
     viz_directory = string( "Figures_", experiment )
     if isdir( viz_directory ) == false 
@@ -264,6 +258,7 @@ export Rheology!
     path = string( "./", viz_directory, "/" ) 
     anim = Plots.Animation( path, String[] ) 
     # Storage
+    displ  = 0
     Wev    = zeros(Float64, params.nt)
     Force  = zeros(Float64, params.nt)
     Displ  = zeros(Float64, params.nt)
@@ -275,6 +270,7 @@ export Rheology!
         @printf("-------------------------------------\n")
         # History
         fields.We0 .= fields.We
+        fields.phiDam0 .= fields.phiDam
         fields.Pc0 .= fields.Pc
         Tau0.xx    .= Tau.xx
         Tau0.yy    .= Tau.yy
@@ -305,20 +301,17 @@ export Rheology!
             @printf("-------------------------------------------------\n")
             @printf("---------- Iteration #%04d (step #%04d)----------\n", iter, it)
             @printf("-------------------------------------------------\n")
-            
             # Evaluate residuals
             println("Residuals")
             @time SetBCs( fields.Vx, fields.Vy, BC )
             @time StrainRate!( Eps, fields.Vx, fields.Vy, domain )
             fields.Damc .= (1.0 .- fields.phiDam ).^2 .+ 1e-6
+            @time CentroidsToVertices!( fields.Damv, fields.Damc, ncx, ncy, BC )
             @time Rheology!( fields, Eps, Tau, params, materials, BC, ncx, ncy )
-            println(minimum(fields.Kc)*scale.S)
-            println(maximum(fields.Kc)*scale.S)
             @time StressVE!( Tau, Tau0, Eps, fields, params.dt )
             @time StrainEnergy!( fields.We, Tau, Eps, Str0, Str, fields.Pc, params.dt, fields, dx, dy )
-
-            @time ResidualsComp!( fields, Tau, Eps, BC, domain, params )
-            @time DamageResidual!( fields, BC_Dam, domain )
+            @time ResidualsCompDam!( fields, Tau, Eps, BC, domain, params )
+            @time DamageResidual!( fields, BC_Dam, domain, materials, params.dt )
             println("|Fx|   = ", norm(fields.Fx)/length(fields.Fx))
             println("|Fy|   = ", norm(fields.Fy)/length(fields.Fy))
             println("|Fp|   = ", norm(fields.Fp)/length(fields.Fp))
@@ -336,7 +329,7 @@ export Rheology!
             println("Solver")
             @time StokesSolver!( fields, params, domain, materials, BC, Kuu, Kup, Kpu )
 
-            K_Dam = DamageAssembly( fields, BC_Dam, domain )
+            K_Dam = DamageAssembly( fields, BC_Dam, domain, materials, params.dt )
             # dd = K_Dam\fields.FDam[:]
             # fields.phiDam .-= dd[fields.NumP]
             # display(Plots.spy(K_Dam))
@@ -349,8 +342,8 @@ export Rheology!
             @time SetBCs( fields.Vx, fields.Vy, BC )
             @time StrainRate!( Eps, fields.Vx, fields.Vy, domain )
             @time StressVE!( Tau, Tau0, Eps, fields, params.dt )
-            @time ResidualsComp!( fields, Tau, Eps, BC, domain, params )
-            @time DamageResidual!( fields, BC_Dam, domain )
+            @time ResidualsCompDam!( fields, Tau, Eps, BC, domain, params )
+            @time DamageResidual!( fields, BC_Dam, domain, materials, params.dt )
 
             println("|Fx|   = ", norm(fields.Fx)/length(fields.Fx))
             println("|Fy|   = ", norm(fields.Fy)/length(fields.Fy))
@@ -388,7 +381,7 @@ export Rheology!
         EYY = DIV*params.t
         WE  = EYY*SYY
         println("Displacement: ", displ * scale.L * 1e3, " --- Max incremental displacement: ", maximum((fields.Vy).*params.dt * scale.L * 1e3 ),  " mm")
-        println("dx = ", domain.dx*scale.L*1e3, " mm --- l0 = ",materials.l0[1]*scale.L*1e3, " mm")
+        println("dx = ", domain.dx*scale.L*1e3, " mm --- l0 = ",materials.lDam*scale.L*1e3, " mm")
         println("min/max div: ", minimum(Eps.div)*(1.0/scale.t), " ", maximum(Eps.div)*(1.0/scale.t))
         println("bulk divergence: ",  DIV*(1.0/scale.t) )
         println("min/max P: ", minimum(fields.Pc)*scale.S, " ", maximum(fields.Pc)*scale.S)

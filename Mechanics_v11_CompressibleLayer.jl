@@ -147,6 +147,8 @@ export Rheology!
     fields.Pc        = zeros(Float64, ncx+0, ncy+0)
     fields.Vx        = zeros(Float64, ncx+1, ncy+2) # !!! GHOST ROWS
     fields.Vy        = zeros(Float64, ncx+2, ncy+1) # !!! GHOST COLUMNS
+    fields.Damc      = ones(Float64, ncx  , ncy  )
+    fields.Damv      = ones(Float64, ncx+1, ncy+1)
     Tau              = Tensor2D( zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+1, ncy+1), zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+0, ncy+0) ) 
     Eps              = Tensor2D( zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+1, ncy+1), zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+0, ncy+0), zeros(Float64, ncx+0, ncy+0) ) 
     if BC.periodix==0 
