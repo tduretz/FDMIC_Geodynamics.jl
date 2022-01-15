@@ -1,11 +1,10 @@
 ##############
 using Revise
 using FDMIC_Geodynamics
-using LoopVectorization, Printf, Base.Threads, Plots, Revise, LinearAlgebra, Statistics, SparseArrays
+using LoopVectorization, Printf, Base.Threads, Plots, Revise, LinearAlgebra, Statistics, SparseArrays, LazyGrids
 ##############
-function SetMarkers!( p::Markers, params::ModelParameters, dom::ModelDomain )
+function SetMarkers!( p::Markers, params::ModelParameters, dom::ModelDomain, α )
     R     = params.user[1]
-    α     = deg2rad(35)
     a_ell = 1.75
     b_ell = 0.25
     # Use this function to set up the model geometry
@@ -30,7 +29,7 @@ function Rheology!( f, Eps, Tau, params, materials, BC, ncx, ncy )
 end
 export Rheology!
 ##############
-@views function main( N, eta_fact )
+@views function main( N, α, eta_fact )
     # Main routine
     println("#####################")
     println("###### M2Di.jl ######")
@@ -98,9 +97,6 @@ export Rheology!
     materials.Tref[2]   = 2.0/eta_fact # reference flow stress
     materials.n[2]      = 1.0
     materials.eta0[2]   = materials.Tref[2] * (1.0/2.0) * abs(params.Ebg)^(-1.0/materials.n[2]) # inclusion viscosity
-    # Output arrays for monitoring
-    Pana = zeros(Float64, params.nt)
-    Pnum = zeros(Float64, params.nt)
     # BC definition
     BC = BoundaryConditions()
     # Pure shear - full Dirichlet
@@ -169,7 +165,7 @@ export Rheology!
     fields.phase_perc    = zeros(Float64,(materials.nphase, ncx  ,ncy  )) # markers per cell
     fields.phase_perc_th = zeros(Float64,(nthreads(), materials.nphase, ncx  ,ncy   )) # markers per cell
     # Initial configuration
-    SetMarkers!( p, params, domain )  # Define phase on markers
+    SetMarkers!( p, params, domain, α )  # Define phase on markers
     SetInitialVelocity2!( fields.Vx, fields.Vy, BC, domain )
     fields.Vxc    = 0.5.*(fields.Vx[1:end-1,2:end-1] .+ fields.Vx[2:end-0,2:end-1])
     fields.Vyc    = 0.5.*(fields.Vy[2:end-1,1:end-1] .+ fields.Vy[2:end-1,2:end-0])
@@ -275,32 +271,37 @@ export Rheology!
             end
         end
     end
-    # Interpolate V on centroids
-    Vxc   = 0.5*(fields.Vx[1:end-1,:2:end-1] .+ fields.Vx[2:end-0,:2:end-1])
-    Vyc   = 0.5*(fields.Vy[2:end-1,:1:end-1] .+ fields.Vy[2:end-1,:2:end-0])
-    psi1  = Eps.II .* Tau.II
-    psi2  = Eps.xx.*Tau.xx .+ Eps.yy.*Tau.yy .+ 2.0.*Eps.xy_c.*Tau.xy_c 
+    # Compute dissipation
+    psi1  = Eps.II .* Tau.II # by invariant product
+    psi2  = Eps.xx.*Tau.xx .+ Eps.yy.*Tau.yy .+ 2.0.*Eps.xy_c.*Tau.xy_c # by tensor contraction
     psi1_inc =  mean( fields.phase_perc[2,:,:] .* psi1 )
     psi2_inc =  mean( fields.phase_perc[2,:,:] .* psi2 )
-    return Tau, Eps, domain, psi1_inc, psi2_inc
+    return fields, domain, psi1_inc, psi2_inc
 end
 
 ####################################################
 ####################################################
 ####################################################
-N       = 200
-eta_val = [1 5 10]# 50 100 500 1000 5000 10000] 
-diss1v  = zeros(length(eta_val))
-diss2v  = zeros(length(eta_val))
+α        = deg2rad(65)  
+ncx, ncy = 200, 200
+eta_val  = [1, 1.1, 1.2, 1.5, 2, 3, 4, 5, 10, 50, 100, 500, 1000, 1250, 5000, 7500, 10000, 11250, 11500] 
+diss1v   = zeros(length(eta_val))
+diss2v   = zeros(length(eta_val))
 # Call solver
 for ieta=1:length(eta_val)
-    @time Tau, Eps, domain, diss1v[ieta], diss2v[ieta] = main( N, eta_val[ieta] )
+    @time fields, domain, diss1v[ieta], diss2v[ieta] = main( ncx, α, eta_val[ieta] )
 end
-println(eta_val)
-println(diss1v)
-p1=plot( log10.(1.0./eta_val), diss1v)
-p1=plot!(log10.(1.0./eta_val), diss2v)
-display(p1)
 # Visualize
-# p1 = Plots.heatmap(domain.xc, domain.yc, Array(Eps.II)', aspect_ratio=1, xlims=(domain.xmin, domain.xmax), ylims=(domain.ymin, domain.ymax), c=Plots.cgrad(:roma, rev = true), title="Exx")
-# display(Plots.plot( p1, dpi=200 ) ) 
+step  = 10
+@time fields, domain, diss1v[ieta], diss2v[ieta] = main( ncx, α, eta_val[end] ) # on extra solve for visualisation
+Vxc   = 0.5*(fields.Vx[1:end-1,:2:end-1] .+ fields.Vx[2:end-0,:2:end-1])
+Vyc   = 0.5*(fields.Vy[2:end-1,:1:end-1] .+ fields.Vy[2:end-1,:2:end-0])
+Vxq   = Vxc[1:step:end,1:step:end]
+Vyq   = Vyc[1:step:end,1:step:end]
+# Make figure
+p1 = plot( log10.(eta_val), diss1v, label="ψ₁")
+p1 = plot!(log10.(eta_val), diss2v, label="ψ₂", xlabel="ηₘ/ηᵢ", ylabel="ψ",legend=:topright)
+p2 = heatmap(domain.xc, domain.yc, Array(fields.Pc)', aspect_ratio=1, xlims=(domain.xmin, domain.xmax), ylims=(domain.ymin, domain.ymax), c=Plots.cgrad(:roma, rev = true), title="P")
+xc2q, yc2q = ndgrid( domain.xc[1:step:end], domain.yc[1:step:end] )
+p2 = quiver!( xc2q[:], yc2q[:], quiver=(Vxq[:], Vyq[:]), lw=0.1, c=:blue)
+display( plot(p1, p2) )

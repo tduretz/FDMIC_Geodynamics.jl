@@ -48,29 +48,31 @@ export Rheology!
     println("###### M2Di.jl ######")
     println("#####################")
     # Name of the experiment
-    experiment       = "ElasticDamage" 
+    experiment       = "ElasticDamageDyke" 
     # Domain
     domain           = ModelDomain()
-    domain.xmin      = -0.5e-3
-    domain.xmax      =  0.5e-3
-    domain.ymin      = -0.0e-3
-    domain.ymax      =  1.0e-3
+    domain.xmin      = -2.5e3
+    domain.xmax      =  2.5e3
+    domain.ymin      = -5.0e3
+    domain.ymax      =  0.0e-3
     # Parameters
     params           = ModelParameters()
-    params.Ebg       = 2.0e-6      # reference strain rate (>0 horizontal compression)
+    params.Ebg       = -2.0e-14      # reference strain rate (>0 horizontal compression)
     # Scales
     scale            = CharScales()
-    scale.L          = 1e-3
+    scale.L          = 1e3
     scale.T          = 1.0
     scale.t          = 1.0/abs(params.Ebg)  
-    scale.S          = 1e7    
+    scale.S          = 1e8   
+    scale.m          = scale.S*scale.L*scale.t^2 
+    scale.rho        = scale.S*scale.L^(-2)*scale.t^2
     # Spatial discretisation
     ncx              = 150;  domain.ncx = ncx
     ncy              = 150;  domain.ncy = ncy
     # Time discretisation
     params.advection = 0
-    params.nt        = 1#800
-    params.dt        = 5.0
+    params.nt        = 2#6*150
+    params.dt        = 1.25e8/4
     params.Courant   = 0.01  # Courant number
     params.dt_var    = 0     # variable dt
     params.t         = 0.0   # time
@@ -80,17 +82,17 @@ export Rheology!
     params.comp      = 1     # Compressible
     # Solver
     params.solver    = 1     # 0: coupled --- 1: decoupled 
-    params.gamma     = 1e8   # Penalty factor
+    params.gamma     = 1e7   # Penalty factor
     params.Dir_scale = 1.0   # Dirichlet scaling factor
     # Non-linear iterations 
-    params.niter_nl  = 5    # max. number of non-linear iterations
+    params.niter_nl  = 15    # max. number of non-linear iterations
     params.tol_nl    = 1e-4  # non-linear tolerance
     params.JFNK      = 0     # Jacobian-Free Newton_Krylov
     # Visualisation
     params.show_figs = 1     # activates visualisation...
     params.nout      = 10    # ... every nout
     # Material setup
-    params.user[1]    = 15e-6/2.0 # layer half thickness
+    params.user[1]    = 5e2 # layer half thickness
     params.user[2]    = 1e-3 # numerical parameter for phase-field algorithm
     # Material parameters
     materials         = MaterialParameters()  
@@ -102,8 +104,8 @@ export Rheology!
     materials.K       = zeros(Float64, materials.nphase)
     # Constant material parameters (all phases)
     materials.gDam    = 2.70e3#zeros(Float64, materials.nphase)
-    materials.lDam    = 15.0e-6#zeros(Float64, materials.nphase)
-    materials.eDam    = 1.0e3#zeros(Float64, materials.nphase)
+    materials.lDam    = 50.0#zeros(Float64, materials.nphase)
+    materials.eDam    = 1.0e20#zeros(Float64, materials.nphase)
     # Material 1
     materials.Tref[1] = 1e-1  # reference flow stress
     materials.n[1]    = 1.0
@@ -137,14 +139,14 @@ export Rheology!
     BC = BoundaryConditions()
     if params.BC_type==1
         ## Pure shear
-        BC.Vx.type_W = 1;     BC.Vx.Dir_W =-0.0*params.Ebg*domain.xmin*ones(ncy+2)
-        BC.Vx.type_E = 1;     BC.Vx.Dir_E =-0.0*params.Ebg*domain.xmax*ones(ncy+2)      
+        BC.Vx.type_W = 1;     BC.Vx.Dir_W =-params.Ebg*domain.xmin*ones(ncy+2)
+        BC.Vx.type_E = 1;     BC.Vx.Dir_E =-params.Ebg*domain.xmax*ones(ncy+2)      
         BC.Vx.type_S =22;     BC.Vx.Dir_S = 0.0*ones(ncx+1)
         BC.Vx.type_N =22;     BC.Vx.Dir_N = 0.0*ones(ncx+1)
         BC.Vy.type_W =22;     BC.Vy.Dir_W = 0.0*ones(ncy+1)
         BC.Vy.type_E =22;     BC.Vy.Dir_E = 0.0*ones(ncy+1)       
-        BC.Vy.type_S = 1;     BC.Vy.Dir_S = params.Ebg*domain.ymin*ones(ncx+2)
-        BC.Vy.type_N = 1;     BC.Vy.Dir_N = params.Ebg*domain.ymax*ones(ncx+2)
+        BC.Vy.type_S = 1;     BC.Vy.Dir_S = 0.0*params.Ebg*domain.ymin*ones(ncx+2)
+        BC.Vy.type_N = 1;     BC.Vy.Dir_N = 0.0*params.Ebg*domain.ymax*ones(ncx+2)
     elseif params.BC_type==2
         ## Simple shear 
         BC.Vx.type_W = 1;     BC.Vx.Dir_W = 0.0*ones(ncy+2)
@@ -183,6 +185,7 @@ export Rheology!
     fields.We0       = zeros(Float64, ncx  , ncy  )
     fields.We        = zeros(Float64, ncx  , ncy  ) 
     fields.rhoc      = zeros(Float64, ncx  , ncy  )
+    fields.rhov      = zeros(Float64, ncx  , ncy  )
     fields.Pc0       = zeros(Float64, ncx+0, ncy+0)
     fields.Pc        = zeros(Float64, ncx+0, ncy+0)
     fields.Vx        = zeros(Float64, ncx+1, ncy+2) # !!! GHOST ROWS
@@ -227,11 +230,19 @@ export Rheology!
     SetInitialVelocity2!( fields.Vx, fields.Vy, BC, domain )
     fields.Vxc    = 0.5.*(fields.Vx[1:end-1,2:end-1] .+ fields.Vx[2:end-0,2:end-1])
     fields.Vyc    = 0.5.*(fields.Vy[2:end-1,1:end-1] .+ fields.Vy[2:end-1,2:end-0])
+    
+    drho         = 200.0  / scale.rho
+    rho0         = 2700.0 / scale.rho
+    fields.rhoc .= rho0 # mc      = tauc*Lc*tc^2;  
+    params.gy    = -0*9.81   / (scale.L/scale.t^2)
+
     # Initial phase field
     BC_Dam.Pinned = zeros(Int64,ncx,ncy) 
+    x0 = (domain.xmax+domain.xmin)/2.0
+    y0 = domain.ymin+0.2*(domain.ymax-domain.ymin)
     for i=1:ncx
         for j=1:ncy
-            if (domain.xc[i] < 0.0) && (abs(domain.yc[j] - (domain.ymax-domain.ymin)/2.0) < params.user[1] )
+            if  ( (domain.xc[i] - x0)^2 + (domain.yc[j] - y0)^2 ) < params.user[1]^2 
                 BC_Dam.Pinned[i,j] = 1
             end
         end
@@ -240,11 +251,17 @@ export Rheology!
     @time CountMarkers3!( p, fields, materials, domain )
     @time Rheology!( fields, Eps, Tau, params, materials, BC, ncx, ncy )
     InitialDamageResidual!( fields, BC_Dam, domain, materials )
+    println("|FDam| = ", norm(fields.FDam)/length(fields.FDam))
     K_Dam = InitialDamageAssembly( fields, BC_Dam, domain, materials )
     Kc    = cholesky(K_Dam)
     dd    = Kc\fields.FDam[:]
     fields.phiDam .-= dd[fields.NumP]
     InitialDamageResidual!( fields, BC_Dam, domain, materials )
+    println("|FDam| = ", norm(fields.FDam)/length(fields.FDam))
+
+    fields.rhoc .-= drho.*fields.phiDam
+    @time CentroidsToVertices!( fields.rhov, fields.rhoc, ncx, ncy, BC )
+
     # Visualisation
     viz_directory = string( "Figures_", experiment )
     if isdir( viz_directory ) == false 
@@ -265,7 +282,9 @@ export Rheology!
         @printf("-------------------------------------\n")
         # History
         fields.We0 .= fields.We
-        fields.phiDam0 .= fields.phiDam
+        if it>1 
+            fields.phiDam0 .= fields.phiDam 
+        end
         fields.Pc0 .= fields.Pc
         Tau0.xx    .= Tau.xx
         Tau0.yy    .= Tau.yy
@@ -300,8 +319,11 @@ export Rheology!
             println("Residuals")
             @time SetBCs( fields.Vx, fields.Vy, BC )
             @time StrainRate!( Eps, fields.Vx, fields.Vy, domain )
-            fields.Damc .= (1.0 .- fields.phiDam ).^2 .+ 1e-6
+            fields.Damc .= (1.0 .- fields.phiDam ).^2 .+ 1e-3
             @time CentroidsToVertices!( fields.Damv, fields.Damc, ncx, ncy, BC )
+            fields.rhoc .= rho0 .- drho.*fields.phiDam
+            @time CentroidsToVertices!( fields.rhov, fields.rhoc, ncx, ncy, BC )
+        
             @time Rheology!( fields, Eps, Tau, params, materials, BC, ncx, ncy )
             @time StressVE!( Tau, Tau0, Eps, fields, params.dt )
             @time StrainEnergy!( fields.We, Tau, Eps, Str0, Str, fields.Pc, params.dt, fields, dx, dy )
@@ -390,14 +412,15 @@ export Rheology!
         # Visualisation
         if params.show_figs==1 && ( mod( it, params.nout )==0 || it==1 )
             l = @layout [ [a; b] c]
-            # p1 = Plots.heatmap( domain.xc, domain.yc, (Tau.xx .- 0.0*fields.Pc)*scale.S)
+            cmy = 3600*24*365*100
+            p2 = Plots.heatmap( domain.xc, domain.yc, (fields.rhoc*scale.rho)', aspect_ratio=1, xlims=(domain.xmin, domain.xmax), ylims=(domain.ymin, domain.ymax), c=Plots.cgrad(:roma, rev = true), title="rho [kg/m^3]",  clim=(2500,2700)  )
             # p2 = Plots.heatmap( domain.xc, domain.yc, (Tau.xy_c .- 0.0*fields.Pc)*scale.S)
             # p2 = Plots.heatmap( domain.xc, domain.yc, Eps.div*(1.0/scale.t) )
-            p1 = Plots.heatmap( domain.xv, domain.yce, Array(fields.Vx*1e9*scale.L/scale.t)', aspect_ratio=1, xlims=(domain.xmin, domain.xmax), ylims=(domain.ymin, domain.ymax), c=Plots.cgrad(:roma, rev = true), title="Vx [nanom/s]" )
-            p2 = Plots.heatmap( domain.xce, domain.yv, Array(fields.Vy*1e9*scale.L/scale.t)', aspect_ratio=1, xlims=(domain.xmin, domain.xmax), ylims=(domain.ymin, domain.ymax), c=Plots.cgrad(:roma, rev = true), title="Vy [nanom/s]" )
+            p1 = Plots.heatmap( domain.xv, domain.yce, Array(fields.Vx*cmy*scale.L/scale.t)', aspect_ratio=1, xlims=(domain.xmin, domain.xmax), ylims=(domain.ymin, domain.ymax), c=Plots.cgrad(:roma, rev = true), title="Vx [cm/y]" ,  clim=(-0.15,0.15) )
+            # p2 = Plots.heatmap( domain.xce, domain.yv, Array(fields.Vy*cmy*scale.L/scale.t)', aspect_ratio=1, xlims=(domain.xmin, domain.xmax), ylims=(domain.ymin, domain.ymax), c=Plots.cgrad(:roma, rev = true), title="Vy [cm/y]" )
             # p1 = Plots.heatmap( domain.xc, domain.yc, Array(fields.We)'*scale.S, aspect_ratio=1, xlims=(domain.xmin, domain.xmax), ylims=(domain.ymin, domain.ymax), c=Plots.cgrad(:roma, rev = true), title="We" )
-            p3 = Plots.heatmap( domain.xc, domain.yc, Array(fields.phiDam)', aspect_ratio=1, xlims=(domain.xmin, domain.xmax), ylims=(domain.ymin, domain.ymax), c=Plots.cgrad(:roma, rev = true), title="phi, niter = $iterations")
-            p4 = Plots.heatmap( domain.xc, domain.yc, Array(Tau.II)'./1e6*scale.S, aspect_ratio=1, xlims=(domain.xmin, domain.xmax), ylims=(domain.ymin, domain.ymax), c=Plots.cgrad(:roma, rev = true), title="Sii [MPa], nt = $it" )
+            p3 = Plots.heatmap( domain.xc, domain.yc, Array(fields.phiDam)', aspect_ratio=1, xlims=(domain.xmin, domain.xmax), ylims=(domain.ymin, domain.ymax), c=Plots.cgrad(:roma, rev = true), title="phi, niter = $iterations",  clim=(0.0,1.0) )
+            p4 = Plots.heatmap( domain.xc, domain.yc, Array(Tau.II)'./1e6*scale.S, aspect_ratio=1, xlims=(domain.xmin, domain.xmax), ylims=(domain.ymin, domain.ymax), c=Plots.cgrad(:roma, rev = true), title="Sii [MPa], nt = $it",  clim=(0.0,40)  )
             # p4 = Plots.heatmap( domain.xc, domain.yc, Array(Str.II)', aspect_ratio=1, xlims=(domain.xmin, domain.xmax), ylims=(domain.ymin, domain.ymax), c=Plots.cgrad(:roma, rev = true), title="Strii" )
 
             # p3 = Plots.heatmap( domain.xc, domain.yc, Array(Tau.II*scale.S)', aspect_ratio=1, xlims=(domain.xmin, domain.xmax), ylims=(domain.ymin, domain.ymax), c=Plots.cgrad(:roma, rev = true), title="Tii" )
@@ -413,6 +436,5 @@ export Rheology!
 end
 
 for it=1:1
-   @time main()
    @time main()
 end
