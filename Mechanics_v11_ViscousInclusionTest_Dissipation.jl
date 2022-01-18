@@ -293,7 +293,7 @@ for ieta=1:length(eta_val)
 end
 # Visualize
 step  = 10
-@time fields, domain, diss1v[ieta], diss2v[ieta] = main( ncx, α, eta_val[end] ) # on extra solve for visualisation
+@time fields, domain, diss1v[ieta], diss2v[ieta] = main( ncx, α, eta_val[end] ) # one extra solve for visualisation
 Vxc   = 0.5*(fields.Vx[1:end-1,:2:end-1] .+ fields.Vx[2:end-0,:2:end-1])
 Vyc   = 0.5*(fields.Vy[2:end-1,:1:end-1] .+ fields.Vy[2:end-1,:2:end-0])
 Vxq   = Vxc[1:step:end,1:step:end]
