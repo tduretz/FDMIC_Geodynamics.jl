@@ -177,26 +177,9 @@ export Rheology!
     end 
     path = string( "./", viz_directory, "/" ) 
     anim = Plots.Animation( path, String[] ) 
-    # Postprocessing
-    Pca       = zeros(Float64, ncx+0, ncy+0)
-    Vxca      = zeros(Float64, ncx+0, ncy+0)
-    Vyca      = zeros(Float64, ncx+0, ncy+0)
     #------------------------ PINNED PRESSURE
-    # Evaluate analytical solution on centroids (moved it before such that pinned pressure can be taken from Pca)
-    for i=1:size(Pca,1)
-        for j=1:size(Pca,2)
-            x  = domain.xc[i]
-            y  = domain.yc[j]
-            in = sqrt(x^2.0 + y^2.0) <= (params.user[1])
-            pa        = SolutionFields_p(materials.eta0[1], materials.eta0[2], params.user[1], params.Ebg, 0.0, x, y, in)
-            vxa, vya  = SolutionFields_v(materials.eta0[1], materials.eta0[2], params.user[1], params.Ebg, 0.0, x, y, in)
-            Pca[i,j]  = pa
-            Vxca[i,j] = vxa
-            Vyca[i,j] = vya
-        end
-    end
     # Set pinned pressure
-    fields.Pc[1,1] = Pca[1,1]
+    fields.Pc[1,1] = 0.0
     #------------------------ PINNED PRESSURE
     # TIME LOOP
     for it=1:params.nt
@@ -294,6 +277,7 @@ for ieta=1:length(eta_val)
 end
 # Visualize
 step  = 10
+ieta  = length(eta_val)
 @time fields, domain, diss1v[ieta], diss2v[ieta] = main( ncx, α, eta_val[end] ) # one extra solve for visualisation
 Vxc   = 0.5*(fields.Vx[1:end-1,:2:end-1] .+ fields.Vx[2:end-0,:2:end-1])
 Vyc   = 0.5*(fields.Vy[2:end-1,:1:end-1] .+ fields.Vy[2:end-1,:2:end-0])
