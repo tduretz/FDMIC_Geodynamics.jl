@@ -107,7 +107,7 @@ export Residuals!
         #Sxx_ex[    end,:] .= -Pc[  1,:] .+ Tau.xx[  1,:] # Do not assemble last column
         f.Fx .= ( diff(Sxx_ex, dims=1)./dx .+ diff(Tau.xy[1:end-1,:], dims=2)/dy )
     end
-    f.Fy[:,2:end-1] .= ( diff(Tau.yy .- f.Pc, dims=2)./dy .+ diff(Tau.xy[:,2:end-1], dims=1)/dx )
+    f.Fy[:,2:end-1] .= ( diff(Tau.yy .- f.Pc, dims=2)./dy .+ diff(Tau.xy[:,2:end-1], dims=1)/dx ) .- params.gy.*0.5.*(f.rhoc[:,1:end-1] .+ f.rhoc[:,2:end])
     if params.comp == 1
         @tturbo f.Fp .= -Eps.div .- (f.Pc .- f.Pc0) ./ (f.Kc.*params.dt)
     else
@@ -132,7 +132,10 @@ export ResidualsComp!
         #Sxx_ex[    end,:] .= -Pc[  1,:] .+ Tau.xx[  1,:] # Do not assemble last column
         f.Fx .= ( diff(Sxx_ex, dims=1)./dx .+ diff(Tau.xy[1:end-1,:], dims=2)/dy )
     end
-    f.Fy[:,2:end-1] .= ( diff(f.Damc.*(Tau.yy .- f.Pc), dims=2)./dy .+ diff(f.Damv[:,2:end-1].*Tau.xy[:,2:end-1], dims=1)/dx )
+    rhoy = 0.5*( f.rhoc[:,1:end-1] .+ f.rhoc[:,2:end-0] )
+    f.Fy[:,2:end-1] .=  params.gy.*rhoy .+ ( diff(f.Damc.*(Tau.yy .- f.Pc), dims=2)./dy .+ diff(f.Damv[:,2:end-1].*Tau.xy[:,2:end-1], dims=1)/dx )
+    println(mean(rhoy))
+    println(params.gy)
     if params.comp == 1
         @tturbo f.Fp .= -Eps.div .- (f.Pc .- f.Pc0) ./ (f.Kc.*params.dt)
     else
@@ -163,7 +166,7 @@ export SetBCs
 
 ########
 
-function NumberingStokes!( f::Fields2D, BC::BoundaryConditions, dom::ModelDomain )
+@views function NumberingStokes!( f::Fields2D, BC::BoundaryConditions, dom::ModelDomain )
     ncx, ncy = dom.ncx, dom.ncy
     # Numbering
     if BC.periodix==0

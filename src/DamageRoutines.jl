@@ -33,7 +33,7 @@
     fE     = 1.0 .+ 1.0.*(BCE.==1) .- 1.0.*(BCE.==2)
     fS     = 1.0 .+ 1.0.*(BCS.==1) .- 1.0.*(BCS.==2)
     fN     = 1.0 .+ 1.0.*(BCN.==1) .- 1.0.*(BCN.==2)
-    cC     =  fN.*kN./dy^2 .+ fS.*kS./dy^2 .+ fE.*kE./dx^2 .+ fW.*kW./dx^2 .+ ( 2*f.We ./ (mat.gDam * mat.lDam) .+  1.0 ./mat.lDam^2 .+ mat.eDam ./ (dt.*mat.gDam * mat.lDam))
+    cC     =  fN.*kN./dy^2 .+ fS.*kS./dy^2 .+ fE.*kE./dx^2 .+ fW.*kW./dx^2 .+ 2.0*f.We ./ (mat.gDam * mat.lDam) .+  1.0 ./mat.lDam.^2 .+ mat.eDam ./ (dt.*mat.gDam .* mat.lDam)
     cW     = -kW./dx^2; cW[BCW.!=0] .= 0.0
     cE     = -kE./dx^2; cE[BCE.!=0] .= 0.0       
     cS     = -kS./dy^2; cS[BCS.!=0] .= 0.0  

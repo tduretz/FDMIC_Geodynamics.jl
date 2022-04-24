@@ -133,7 +133,7 @@ export StokesSolver!
         @tturbo ru   .= fu .- Kuu*u .- Kup*p;
         @tturbo rp   .= fp .- Kpu*u .- Kpp*p;
         @printf("  --> Powell-Hestenes Iteration %02d\n  Momentum res.   = %2.2e\n  Continuity res. = %2.2e\n", rit, norm(ru)/sqrt(length(ru)), norm(rp)/sqrt(length(rp)))
-        if norm(ru)/(length(ru)) < 1e-10 && norm(rp)/(length(ru)) < 1e-10
+        if norm(ru)/(length(ru)) < 1e-13 && norm(rp)/(length(ru)) < 1e-13
             break
         end
         @tturbo fusc .=  fu .- Kup*(Kppi*fp .+ p)
@@ -148,7 +148,7 @@ export DecoupledSolver!
 
 ##############
 
-function KSP_GCR_Stokes!( x::Vector{Float64}, M::SparseMatrixCSC{Float64, Int64}, b::Vector{Float64}, eps::Float64, noisy::Int64, Kuu::SparseMatrixCSC{Float64, Int64}, Kup::SparseMatrixCSC{Float64, Int64}, Kpu::SparseMatrixCSC{Float64, Int64}, Kpp::SparseMatrixCSC{Float64, Int64}, Kppi::SparseMatrixCSC{Float64, Int64} )
+@views function KSP_GCR_Stokes!( x::Vector{Float64}, M::SparseMatrixCSC{Float64, Int64}, b::Vector{Float64}, eps::Float64, noisy::Int64, Kuu::SparseMatrixCSC{Float64, Int64}, Kup::SparseMatrixCSC{Float64, Int64}, Kpu::SparseMatrixCSC{Float64, Int64}, Kpp::SparseMatrixCSC{Float64, Int64}, Kppi::SparseMatrixCSC{Float64, Int64} )
     # KSP GCR solver
     norm_r, norm0 = 0.0, 0.0
     N         = length(x)

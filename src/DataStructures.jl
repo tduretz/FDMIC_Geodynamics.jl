@@ -104,6 +104,8 @@ export MaterialParameters
 Base.@kwdef mutable struct ModelParameters 
     # User interface
     user          = zeros(Float64, 10) 
+    gx            :: Union{Float64, Missing}   = missing
+    gy            :: Union{Float64, Missing}   = missing
     # Switches
     BC_type       :: Union{Int64, Missing}     = missing    # 1: Pure shear / 2: Simple shear / 3: Simple shear periodic
     comp          :: Union{Int64, Missing}     = missing    # Compressible
@@ -143,6 +145,7 @@ Base.@kwdef mutable struct Fields2D
     We        :: Union{Matrix{Float64}, Missing} = missing
     We0       :: Union{Matrix{Float64}, Missing} = missing
     rhoc      :: Union{Matrix{Float64}, Missing} = missing
+    rhov      :: Union{Matrix{Float64}, Missing} = missing
     Pc0       :: Union{Matrix{Float64}, Missing} = missing
     Pc        :: Union{Matrix{Float64}, Missing} = missing
     Vx        :: Union{Matrix{Float64}, Missing} = missing
@@ -179,5 +182,8 @@ Base.@kwdef mutable struct CharScales
     t      :: Union{Float64, Missing}   = missing
     S      :: Union{Float64, Missing}   = missing
     T      :: Union{Float64, Missing}   = missing
+    ######
+    rho    :: Union{Float64, Missing}   = missing
+    m      :: Union{Float64, Missing}   = missing
 end
 export CharScales
