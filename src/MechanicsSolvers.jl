@@ -66,15 +66,15 @@
         nVy = length(f.Fy)
         nP  = length(f.Fp)
         if params.comp==1
-            @tturbo coef      = 1.0./(f.Kc[:].*params.dt).*ones(length(f.etac))#.*etac[:]
-            @tturbo coef_inv  = f.Kc[:].*params.dt.*ones(length(f.etac))#.*etac[:]
+             coef      = 1.0./(f.Kc[:].*params.dt).*ones(length(f.etac))#.*etac[:]
+             coef_inv  = f.Kc[:].*params.dt.*ones(length(f.etac))#.*etac[:]
         else
-            @tturbo coef      =    0.0*ones(length(f.etac))#.*etac[:]
-            @tturbo coef_inv  = params.gamma*ones(length(f.etac))#.*etac[:]
+             coef      =    0.0*ones(length(f.etac))#.*etac[:]
+             coef_inv  = params.gamma*ones(length(f.etac))#.*etac[:]
         end
-        @tturbo Kpp   = spdiagm(coef)
-        @tturbo Kppi  = spdiagm(coef_inv)
-        @tturbo M     = [Kuu Kup; Kpu Kpp]
+         Kpp   = spdiagm(coef)
+         Kppi  = spdiagm(coef_inv)
+         M     = [Kuu Kup; Kpu Kpp]
         dx    = zeros(Float64, size(M,1))
         x     = zero(dx)
         Vxi   = f.Vx[:,2:end-1]
@@ -111,16 +111,16 @@ export StokesSolver!
     ndofu = size(Kup,1)
     ndofp = size(Kup,2)
     if params.comp==1
-        @tturbo coef      = 1.0./(f.Kc[:].*params.dt).*ones(length(f.etac))#.*etac[:]
-        @tturbo coef_inv  = f.Kc[:].*params.dt.*ones(length(f.etac))#.*etac[:]
+         coef      = 1.0./(f.Kc[:].*params.dt).*ones(length(f.etac))#.*etac[:]
+         coef_inv  = f.Kc[:].*params.dt.*ones(length(f.etac))#.*etac[:]
     else
-        @tturbo coef      =    0.0*ones(length(f.etac))#.*etac[:]
-        @tturbo coef_inv  = params.gamma*ones(length(f.etac))#.*etac[:]
+         coef      =    0.0*ones(length(f.etac))#.*etac[:]
+         coef_inv  = params.gamma*ones(length(f.etac))#.*etac[:]
     end
-    @tturbo Kpp   = spdiagm(coef)
-    @tturbo Kppi  = spdiagm(coef_inv)
-    @tturbo Kuusc = Kuu - Kup*(Kppi*Kpu) # OK
-    @tturbo PC    =  0.5*(Kuusc + Kuusc') 
+     Kpp   = spdiagm(coef)
+     Kppi  = spdiagm(coef_inv)
+     Kuusc = Kuu - Kup*(Kppi*Kpu) # OK
+     PC    =  0.5*(Kuusc + Kuusc') 
     t = @elapsed Kf    = cholesky(Hermitian(PC), check = false)
     @printf("Cholesky took = %02.2e s\n", t)
     u     = zeros(Float64,ndofu)
@@ -130,15 +130,15 @@ export StokesSolver!
     rp    = zeros(Float64,ndofp)
     # Iterations
     for rit=1:10
-        @tturbo ru   .= fu .- Kuu*u .- Kup*p;
-        @tturbo rp   .= fp .- Kpu*u .- Kpp*p;
+         ru   .= fu .- Kuu*u .- Kup*p;
+         rp   .= fp .- Kpu*u .- Kpp*p;
         @printf("  --> Powell-Hestenes Iteration %02d\n  Momentum res.   = %2.2e\n  Continuity res. = %2.2e\n", rit, norm(ru)/sqrt(length(ru)), norm(rp)/sqrt(length(rp)))
         if norm(ru)/(length(ru)) < 1e-13 && norm(rp)/(length(ru)) < 1e-13
             break
         end
-        @tturbo fusc .=  fu .- Kup*(Kppi*fp .+ p)
-        @tturbo u    .= Kf\fusc
-        @tturbo p   .+= Kppi*(fp .- Kpu*u .- Kpp*p)
+         fusc .=  fu .- Kup*(Kppi*fp .+ p)
+         u    .= Kf\fusc
+         p   .+= Kppi*(fp .- Kpu*u .- Kpp*p)
     end
     f.Vx[:,2:end-1] .= f.Vx[:,2:end-1] .+ u[f.NumVx]
     f.Vy[2:end-1,:] .= f.Vy[2:end-1,:] .+ u[f.NumVy]
@@ -181,47 +181,47 @@ export DecoupledSolver!
     sp    = zeros(Float64, ndofp)
     fu    = zeros(Float64, ndofu)
     fp    = zeros(Float64, ndofp)
-    @tturbo fu     .= f[1:ndofu]
-    @tturbo fp     .= f[ndofu+1:end]
+     fu     .= f[1:ndofu]
+     fp     .= f[ndofu+1:end]
     if (noisy > 1) @printf("       %1.4d KSP GCR Residual %1.12e %1.12e\n", 0, norm_r, norm_r/norm0); end
     # Solving procedure
      while ( success == 0 && its<maxit ) 
         for i1=1:restart
             # Apply preconditioner, s = PC^{-1} f
             # s = PC\f
-            @tturbo fusc .= fu  - Kup*(Kppi*fp + sp)
-            @tturbo su   .= Kf\fusc
-            @tturbo sp   .+= Kppi*(fp - Kpu*su)
-            @tturbo s[1:ndofu]     .= su
-            @tturbo s[ndofu+1:end] .= sp
+             fusc .= fu  - Kup*(Kppi*fp + sp)
+             su   .= Kf\fusc
+             sp   .+= Kppi*(fp - Kpu*su)
+             s[1:ndofu]     .= su
+             s[ndofu+1:end] .= sp
             # Action of Jacobian on s: v = J*s
             # JacobianAction!(v, M, s; r,kv,T,fc,TW,TE,dx,n)
-            @tturbo v .= M*s
+             v .= M*s
             # Approximation of the Jv product
             for i2=1:i1
-                @tturbo val[i2] = v' * VV[i2,:]
+                 val[i2] = v' * VV[i2,:]
             end
             # Scaling
             for i2=1:i1
-                @tturbo v .-= val[i2] * VV[i2,:]
-                @tturbo s .-= val[i2] * SS[i2,:]
+                 v .-= val[i2] * VV[i2,:]
+                 s .-= val[i2] * SS[i2,:]
             end
             # -----------------
-            @tturbo r_dot_v = f'*v
+             r_dot_v = f'*v
             nrm     = norm(v)
             r_dot_v = r_dot_v / nrm
             # -----------------
             fact    = 1.0/nrm
-            @tturbo v     .*= fact
-            @tturbo s     .*= fact
+             v     .*= fact
+             s     .*= fact
             # -----------------
             fact    = r_dot_v;
-            @tturbo x     .+= fact*s
-            @tturbo f     .-= fact*v
+             x     .+= fact*s
+             f     .-= fact*v
             # -----------------
             norm_r  = norm(f) 
-            @tturbo fu     .= f[1:ndofu]
-            @tturbo fp     .= f[ndofu+1:end]
+             fu     .= f[1:ndofu]
+             fp     .= f[ndofu+1:end]
             @printf("  --> Powell-Hestenes Iteration %02d\n  Momentum res.   = %2.2e\n  Continuity res. = %2.2e\n", its, norm(fu)/sqrt(length(fu)), norm(fp)/sqrt(length(fp)))
             if norm(fu)/(length(fu)) < 1e-10 && norm(fp)/(length(fu)) < 1e-10 #(norm_r < eps * norm0 )
                 success = 1
@@ -229,8 +229,8 @@ export DecoupledSolver!
                 break
             end
             # Store 
-            @tturbo VV[i1,:] .= v
-            @tturbo SS[i1,:] .= s
+             VV[i1,:] .= v
+             SS[i1,:] .= s
             its              += 1
         end
         its  += 1
@@ -283,8 +283,8 @@ function KSP_GCR_Stokes2!( x::Vector{Float64}, M::SparseMatrixCSC{Float64, Int64
     sp    = zeros(Float64, ndofp)
     fu    = zeros(Float64, ndofu)
     fp    = zeros(Float64, ndofp)
-    @tturbo fu     .= r[1:ndofu]
-    @tturbo fp     .= r[ndofu+1:end]
+     fu     .= r[1:ndofu]
+     fp     .= r[ndofu+1:end]
     if (noisy > 1) @printf("       %1.4d KSP GCR Residual %1.12e %1.12e\n", 0, norm_r, norm_r/norm0); end
     
     # res!( F1, X, f, Eps, Tau, dom, BC, params, materials, 1 ) 
@@ -297,14 +297,14 @@ function KSP_GCR_Stokes2!( x::Vector{Float64}, M::SparseMatrixCSC{Float64, Int64
         for i1=1:restart
             # Apply preconditioner, s = PC^{-1} f
             # s = PC\f
-            @tturbo fusc .= fu  - Kup*(Kppi*fp + sp)
-            @tturbo su   .= Kf\fusc
-            @tturbo sp   .+= Kppi*(fp - Kpu*su)
-            @tturbo s[1:ndofu]     .= su
-            @tturbo s[ndofu+1:end] .= sp
+             fusc .= fu  - Kup*(Kppi*fp + sp)
+             su   .= Kf\fusc
+             sp   .+= Kppi*(fp - Kpu*su)
+             s[1:ndofu]     .= su
+             s[ndofu+1:end] .= sp
             
             # Action of Jacobian on s: v = J*s
-            # @tturbo v .= M*s
+            #  v .= M*s
 
             # res!( F1, s, f, Eps, Tau, dom, BC, params, materials, 0 ) 
             # v .= F1
@@ -315,27 +315,27 @@ function KSP_GCR_Stokes2!( x::Vector{Float64}, M::SparseMatrixCSC{Float64, Int64
             
             # Approximation of the Jv product
             for i2=1:i1
-                @tturbo val[i2] = v' * VV[i2,:]
+                 val[i2] = v' * VV[i2,:]
             end
             # Scaling
             for i2=1:i1
-                @tturbo v .-= val[i2] .* VV[i2,:]
-                @tturbo s .-= val[i2] .* SS[i2,:]
+                 v .-= val[i2] .* VV[i2,:]
+                 s .-= val[i2] .* SS[i2,:]
             end
             # -----------------
-            @tturbo r_dot_v = r'*v
+             r_dot_v = r'*v
             nrm      = sqrt(v'*v)
             r_dot_v /= nrm
             # -----------------
-            @tturbo v     ./= nrm
-            @tturbo s     ./= nrm
+             v     ./= nrm
+             s     ./= nrm
             # -----------------
-            @tturbo x     .+= r_dot_v*s
-            @tturbo r     .-= r_dot_v*v
+             x     .+= r_dot_v*s
+             r     .-= r_dot_v*v
             # -----------------
             norm_r  = sqrt(r'*r) 
-            @tturbo fu     .= r[1:ndofu]
-            @tturbo fp     .= r[ndofu+1:end]
+             fu     .= r[1:ndofu]
+             fp     .= r[ndofu+1:end]
             # @printf("  --> Powell-Hestenes Iteration %02d\n  Momentum res.   = %2.2e\n  Continuity res. = %2.2e\n", its, norm(fu)/sqrt(length(fu)), norm(fp)/sqrt(length(fp)))
             if norm(fu)/(length(fu)) < 1e-10 && norm(fp)/(length(fu)) < 1e-10 #(norm_r < eps * norm0 )
                 success = 1
@@ -343,8 +343,8 @@ function KSP_GCR_Stokes2!( x::Vector{Float64}, M::SparseMatrixCSC{Float64, Int64
                 break
             end
             # Store 
-            @tturbo VV[i1,:] .= v[:]
-            @tturbo SS[i1,:] .= s[:]
+             VV[i1,:] .= v[:]
+             SS[i1,:] .= s[:]
             its              += 1
         end
         its  += 1
@@ -362,9 +362,9 @@ function Rheology_local!( f::Fields2D, Eps::Tensor2D, Tau::Tensor2D, params::Mod
     f.etac .= 0.0
     # f.Kc   .= 0.0
     for m=1:materials.nphase
-        @tturbo eta    = 2.0* materials.eta0[m] * Eps.II.^(1.0/materials.n[m] - 1.0)
-        @tturbo f.etac .+= f.phase_perc[m,:,:] .* eta
-        # @tturbo f.Kc   .+= f.phase_perc[m,:,:] .* materials.K[m]
+         eta    = 2.0* materials.eta0[m] * Eps.II.^(1.0/materials.n[m] - 1.0)
+         f.etac .+= f.phase_perc[m,:,:] .* eta
+        #  f.Kc   .+= f.phase_perc[m,:,:] .* materials.K[m]
     end
     CentroidsToVertices!( f.etav, f.etac, ncx, ncy, BC )
     # println("min Eii: ", minimum(Eps.II), " --- max Eii: ", maximum(Eps.II))

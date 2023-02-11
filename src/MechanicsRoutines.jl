@@ -1,42 +1,42 @@
 @views function StrainRate!( Eps::Tensor2D, Vx::Matrix{Float64}, Vy::Matrix{Float64}, dom::ModelDomain )
     dx, dy = dom.dx, dom.dy
-    @tturbo Eps.div    .= diff(Vx[:,2:end-1],dims=1)./dx .+ diff(Vy[2:end-1,:],dims=2)./dy 
+     Eps.div    .= diff(Vx[:,2:end-1],dims=1)./dx .+ diff(Vy[2:end-1,:],dims=2)./dy 
     # ncx, ncy = size(div,1), size(div,2)
-    # @tturbo for i=1:ncx
+    #  for i=1:ncx
     #     for j=1:ncy
     #         div[i,j] = 1.0/dx * (Vx[i+1,j+1] - Vx[i,j+1]) + 1.0/dy * (Vy[i+1,j+1] - Vy[i+1,j])
     #     end
     # end
-    @tturbo Eps.xx .= diff(Vx[:,2:end-1],dims=1)./dx .- 1.0/3.0 .* Eps.div
-    @tturbo Eps.yy .= diff(Vy[2:end-1,:],dims=2)./dy .- 1.0/3.0 .* Eps.div
-    @tturbo Eps.zz .= .-(Eps.xx .+ Eps.yy)
-    @tturbo Eps.xy .= 0.5.*( diff(Vx,dims=2)./dy .+ diff(Vy,dims=1)/dx ) 
+     Eps.xx .= diff(Vx[:,2:end-1],dims=1)./dx .- 1.0/3.0 .* Eps.div
+     Eps.yy .= diff(Vy[2:end-1,:],dims=2)./dy .- 1.0/3.0 .* Eps.div
+     Eps.zz .= .-(Eps.xx .+ Eps.yy)
+     Eps.xy .= 0.5.*( diff(Vx,dims=2)./dy .+ diff(Vy,dims=1)/dx ) 
     VerticesToCentroids!( Eps.xy_c, Eps.xy )
-    @tturbo Eps.II .= sqrt.(0.5*(Eps.xx.^2 .+ Eps.xx.^2 .+ Eps.zz.^2) .+ Eps.xy_c.^2)
+     Eps.II .= sqrt.(0.5*(Eps.xx.^2 .+ Eps.xx.^2 .+ Eps.zz.^2) .+ Eps.xy_c.^2)
 end
 export StrainRate!
 
 ########
 
 @views function Stress!( Tau::Tensor2D, Eps::Tensor2D, f::Fields2D )
-    @tturbo Tau.xx .= 2.0.*f.etac.*Eps.xx 
-    @tturbo Tau.yy .= 2.0.*f.etac.*Eps.yy
-    @tturbo Tau.zz .= 2.0.*f.etac.*Eps.zz  
-    @tturbo Tau.xy .= 2.0.*f.etav.*Eps.xy 
+     Tau.xx .= 2.0.*f.etac.*Eps.xx 
+     Tau.yy .= 2.0.*f.etac.*Eps.yy
+     Tau.zz .= 2.0.*f.etac.*Eps.zz  
+     Tau.xy .= 2.0.*f.etav.*Eps.xy 
     VerticesToCentroids!( Tau.xy_c, Tau.xy )
-    @tturbo Tau.II .= sqrt.(0.5*(Tau.xx.^2 .+ Tau.xx.^2 .+ Tau.zz.^2) .+ Tau.xy_c.^2)
+     Tau.II .= sqrt.(0.5*(Tau.xx.^2 .+ Tau.xx.^2 .+ Tau.zz.^2) .+ Tau.xy_c.^2)
 end
 export Stress!
 
 ########
 
 @views function StressVE!( Tau::Tensor2D, Tau0::Tensor2D, Eps::Tensor2D, f::Fields2D, dt::Float64 )
-    @tturbo Tau.xx .= 2f.etac.* ( Eps.xx .+ Tau0.xx ./ ( 2f.Gc.*dt ) ) 
-    @tturbo Tau.yy .= 2f.etac.* ( Eps.yy .+ Tau0.yy ./ ( 2f.Gc.*dt ) ) 
-    @tturbo Tau.zz .= 2f.etac.* ( Eps.zz .+ Tau0.zz ./ ( 2f.Gc.*dt ) ) 
-    @tturbo Tau.xy .= 2f.etav.* ( Eps.xy .+ Tau0.xy ./ ( 2f.Gv.*dt ) ) 
+     Tau.xx .= 2f.etac.* ( Eps.xx .+ Tau0.xx ./ ( 2f.Gc.*dt ) ) 
+     Tau.yy .= 2f.etac.* ( Eps.yy .+ Tau0.yy ./ ( 2f.Gc.*dt ) ) 
+     Tau.zz .= 2f.etac.* ( Eps.zz .+ Tau0.zz ./ ( 2f.Gc.*dt ) ) 
+     Tau.xy .= 2f.etav.* ( Eps.xy .+ Tau0.xy ./ ( 2f.Gv.*dt ) ) 
     VerticesToCentroids!( Tau.xy_c, Tau.xy )
-    @tturbo Tau.II .= sqrt.(0.5*((f.Damc.*Tau.xx).^2 .+ (f.Damc.*Tau.yy).^2 .+ (f.Damc.*Tau.zz).^2) .+ (f.Damc.*Tau.xy_c).^2)
+     Tau.II .= sqrt.(0.5*((f.Damc.*Tau.xx).^2 .+ (f.Damc.*Tau.yy).^2 .+ (f.Damc.*Tau.zz).^2) .+ (f.Damc.*Tau.xy_c).^2)
 end
 export StressVE!
 
@@ -46,7 +46,7 @@ function StrainEnergy!( We::Matrix{Float64}, Tau::Tensor2D, Eps::Tensor2D, Str0:
     Str.yy   .= Str0.yy   .+ dt.*(Eps.yy .+ 1.0/3.0.*Eps.div)
     Str.zz   .= Str0.zz   .+ dt.*(Eps.zz .+ 1.0/3.0.*Eps.div)
     Str.xy_c .= Str0.xy_c .+ dt.*(Eps.xy_c)
-    @tturbo Str.II .= sqrt.(0.5*(Str.xx.^2 .+ Str.xx.^2 .+ Str.zz.^2) .+ Str.xy_c.^2)
+     Str.II .= sqrt.(0.5*(Str.xx.^2 .+ Str.xx.^2 .+ Str.zz.^2) .+ Str.xy_c.^2)
     We  .= (Tau.xx .- P) .* Str.xx .+ (Tau.yy .- P) .* Str.yy .+ (Tau.zz .- P) .* Str.zz .+ 2.0.*Tau.xy_c .* Str.xy_c
     We .*= 0.5  
     # We ./= f.Damc
@@ -70,20 +70,20 @@ export StrainEnergy!
 
 @views function Residuals!( f::Fields2D, Tau::Tensor2D, Eps::Tensor2D, BC::BoundaryConditions, dom::ModelDomain, params::ModelParameters )
     dx, dy = dom.dx, dom.dy
-    @tturbo f.Fx .= 0.0
-    @tturbo f.Fy .= 0.0
-    @tturbo f.Fp .= 0.0
+     f.Fx .= 0.0
+     f.Fy .= 0.0
+     f.Fp .= 0.0
     if BC.periodix==0
         f.Fx[2:end-1,:] .= ( diff(Tau.xx .- f.Pc, dims=1)./dx .+ diff(Tau.xy[2:end-1,:], dims=2)/dy )
     else
         Sxx_ex             = zeros(ncx+1,ncy)
-        @tturbo Sxx_ex[2:end-0,:] .= -f.Pc .+ Tau.xx
+         Sxx_ex[2:end-0,:] .= -f.Pc .+ Tau.xx
         Sxx_ex[      1,:] .= -f.Pc[end,:] .+ Tau.xx[end,:]
         #Sxx_ex[    end,:] .= -Pc[  1,:] .+ Tau.xx[  1,:] # Do not assemble last column
         f.Fx .= ( diff(Sxx_ex, dims=1)./dx .+ diff(Tau.xy[1:end-1,:], dims=2)/dy )
     end
     f.Fy[:,2:end-1] .= ( diff(Tau.yy .- f.Pc, dims=2)./dy .+ diff(Tau.xy[:,2:end-1], dims=1)/dx )
-    @tturbo f.Fp            .= -Eps.div
+     f.Fp            .= -Eps.div
     # # For periodic
     # if BC.periodix==1
     #     Fx = Fx[1:end-1,:]
@@ -95,23 +95,23 @@ export Residuals!
 
 @views function ResidualsComp!( f::Fields2D, Tau::Tensor2D, Eps::Tensor2D, BC::BoundaryConditions, dom::ModelDomain, params::ModelParameters )
     dx, dy, ncx, ncy = dom.dx, dom.dy, dom.ncx, dom.ncy 
-    @tturbo f.Fx .= 0.0
-    @tturbo f.Fy .= 0.0
-    @tturbo f.Fp .= 0.0
+     f.Fx .= 0.0
+     f.Fy .= 0.0
+     f.Fp .= 0.0
     if BC.periodix==0
         f.Fx[2:end-1,:] .= ( diff(Tau.xx .- f.Pc, dims=1)./dx .+ diff(Tau.xy[2:end-1,:], dims=2)/dy )
     else
         Sxx_ex             = zeros(ncx+1,ncy)
-        @tturbo Sxx_ex[2:end-0,:] .= -f.Pc .+ Tau.xx
+         Sxx_ex[2:end-0,:] .= -f.Pc .+ Tau.xx
         Sxx_ex[      1,:] .= -f.Pc[end,:] .+ Tau.xx[end,:]
         #Sxx_ex[    end,:] .= -Pc[  1,:] .+ Tau.xx[  1,:] # Do not assemble last column
         f.Fx .= ( diff(Sxx_ex, dims=1)./dx .+ diff(Tau.xy[1:end-1,:], dims=2)/dy )
     end
     f.Fy[:,2:end-1] .= ( diff(Tau.yy .- f.Pc, dims=2)./dy .+ diff(Tau.xy[:,2:end-1], dims=1)/dx ) .- params.gy.*0.5.*(f.rhoc[:,1:end-1] .+ f.rhoc[:,2:end])
     if params.comp == 1
-        @tturbo f.Fp .= -Eps.div .- (f.Pc .- f.Pc0) ./ (f.Kc.*params.dt)
+         f.Fp .= -Eps.div .- (f.Pc .- f.Pc0) ./ (f.Kc.*params.dt)
     else
-        @tturbo f.Fp .= -Eps.div
+         f.Fp .= -Eps.div
     end
 end
 export ResidualsComp!
@@ -120,14 +120,14 @@ export ResidualsComp!
 
 @views function ResidualsCompDam!( f::Fields2D, Tau::Tensor2D, Eps::Tensor2D, BC::BoundaryConditions, dom::ModelDomain, params::ModelParameters )
     dx, dy, ncx, ncy = dom.dx, dom.dy, dom.ncx, dom.ncy 
-    @tturbo f.Fx .= 0.0
-    @tturbo f.Fy .= 0.0
-    @tturbo f.Fp .= 0.0
+     f.Fx .= 0.0
+     f.Fy .= 0.0
+     f.Fp .= 0.0
     if BC.periodix==0
         f.Fx[2:end-1,:] .= ( diff(f.Damc.*(Tau.xx .- f.Pc), dims=1)./dx .+ diff(f.Damv[2:end-1,:].*Tau.xy[2:end-1,:], dims=2)/dy )
     else
         Sxx_ex             = zeros(ncx+1,ncy)
-        @tturbo Sxx_ex[2:end-0,:] .= -f.Pc .+ Tau.xx
+         Sxx_ex[2:end-0,:] .= -f.Pc .+ Tau.xx
         Sxx_ex[      1,:] .= -f.Pc[end,:] .+ Tau.xx[end,:]
         #Sxx_ex[    end,:] .= -Pc[  1,:] .+ Tau.xx[  1,:] # Do not assemble last column
         f.Fx .= ( diff(Sxx_ex, dims=1)./dx .+ diff(Tau.xy[1:end-1,:], dims=2)/dy )
@@ -137,9 +137,9 @@ export ResidualsComp!
     println(mean(rhoy))
     println(params.gy)
     if params.comp == 1
-        @tturbo f.Fp .= -Eps.div .- (f.Pc .- f.Pc0) ./ (f.Kc.*params.dt)
+         f.Fp .= -Eps.div .- (f.Pc .- f.Pc0) ./ (f.Kc.*params.dt)
     else
-        @tturbo f.Fp .= -Eps.div
+         f.Fp .= -Eps.div
     end
 end
 export ResidualsCompDam!
@@ -238,17 +238,17 @@ export NumberingStokes!
     end
 
     # Finite difference coefficients
-    @tturbo cVxC  = -(-1.0.*etaN./dy - 1.0.*etaS./dy)./dy - (-4/3*etaE./dx - 4/3*etaW./dx)./dx
-    @tturbo cVxW  = -4/3*etaW./dx.^2
-    @tturbo cVxE  = -4/3*etaE./dx.^2
-    @tturbo cVxS  = -1.0*etaS./dy.^2
-    @tturbo cVxN  = -1.0*etaN./dy.^2
-    @tturbo cVySW = -1.0*etaS./(dx.*dy) + 2/3*etaW./(dx.*dy)
-    @tturbo cVySE = -2/3*etaE./(dx.*dy) + 1.0*etaS./(dx.*dy)
-    @tturbo cVyNW = 1.0*etaN./(dx.*dy) - 2/3*etaW./(dx.*dy)
-    @tturbo cVyNE = 2/3*etaE./(dx.*dy) - 1.0*etaN./(dx.*dy)
-    @tturbo cPW   = -DamW./dx .*  ones(Float64, nxvx, ncy)
-    @tturbo cPE   =  DamE./dx .*  ones(Float64, nxvx, ncy)
+     cVxC  = -(-1.0.*etaN./dy - 1.0.*etaS./dy)./dy - (-4/3*etaE./dx - 4/3*etaW./dx)./dx
+     cVxW  = -4/3*etaW./dx.^2
+     cVxE  = -4/3*etaE./dx.^2
+     cVxS  = -1.0*etaS./dy.^2
+     cVxN  = -1.0*etaN./dy.^2
+     cVySW = -1.0*etaS./(dx.*dy) + 2/3*etaW./(dx.*dy)
+     cVySE = -2/3*etaE./(dx.*dy) + 1.0*etaS./(dx.*dy)
+     cVyNW = 1.0*etaN./(dx.*dy) - 2/3*etaW./(dx.*dy)
+     cVyNE = 2/3*etaE./(dx.*dy) - 1.0*etaN./(dx.*dy)
+     cPW   = -DamW./dx .*  ones(Float64, nxvx, ncy)
+     cPE   =  DamE./dx .*  ones(Float64, nxvx, ncy)
 
     if BC.Vx.type_S==11
         cVxC[:,  1] .-= cVxS[:,  1]
@@ -316,19 +316,19 @@ export NumberingStokes!
     etaW      = zeros(size(NumVy)); etaW[1:end-0,:] = etav[1:end-1,:] 
     etaE      = zeros(size(NumVy)); etaE[1:end-0,:] = etav[2:end-0,:]
     # Finite difference coefficients
-    @tturbo cVyC  = -(-4/3*etaN./dy - 4/3*etaS./dy)./dy - (-1.0*etaE./dx - 1.0*etaW./dx)./dx
-    @tturbo cVyW  = -1.0*etaW./dx.^2
-    @tturbo cVyE  = -1.0*etaE./dx.^2
-    @tturbo cVyS  = -4/3*etaS./dy.^2
-    @tturbo cVyN  = -4/3*etaN./dy.^2
-    @tturbo cVxSW = 2/3*etaS./(dx.*dy) - 1.0*etaW./(dx.*dy)
-    @tturbo cVxSE = 1.0*etaE./(dx.*dy) - 2/3*etaS./(dx.*dy)
-    @tturbo cVxNW = -2/3*etaN./(dx.*dy) + 1.0*etaW./(dx.*dy)
-    @tturbo cVxNE = -1.0*etaE./(dx.*dy) + 2/3*etaN./(dx.*dy)
+     cVyC  = -(-4/3*etaN./dy - 4/3*etaS./dy)./dy - (-1.0*etaE./dx - 1.0*etaW./dx)./dx
+     cVyW  = -1.0*etaW./dx.^2
+     cVyE  = -1.0*etaE./dx.^2
+     cVyS  = -4/3*etaS./dy.^2
+     cVyN  = -4/3*etaN./dy.^2
+     cVxSW = 2/3*etaS./(dx.*dy) - 1.0*etaW./(dx.*dy)
+     cVxSE = 1.0*etaE./(dx.*dy) - 2/3*etaS./(dx.*dy)
+     cVxNW = -2/3*etaN./(dx.*dy) + 1.0*etaW./(dx.*dy)
+     cVxNE = -1.0*etaE./(dx.*dy) + 2/3*etaN./(dx.*dy)
     DamS =  ones(Float64, size(NumVy)); DamS[:,2:end-0]   .= f.Damc
     DamN =  ones(Float64, size(NumVy)); DamN[:,1:end-1]   .= f.Damc
-    @tturbo cPS   = -DamS./dy .* ones(size(NumVy)); cPS[:,  1] .= 0.0;  cPS[:,end] .= 0.0
-    @tturbo cPN   =  DamN./dy .* ones(size(NumVy)); cPN[:,  1] .= 0.0;  cPN[:,end] .= 0.0
+     cPS   = -DamS./dy .* ones(size(NumVy)); cPS[:,  1] .= 0.0;  cPS[:,end] .= 0.0
+     cPN   =  DamN./dy .* ones(size(NumVy)); cPN[:,  1] .= 0.0;  cPN[:,end] .= 0.0
 
     if BC.periodix==0
         if BC.Vy.type_W==11
