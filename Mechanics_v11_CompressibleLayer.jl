@@ -1,7 +1,7 @@
 ##############
 using Revise
 using FDMIC_Geodynamics
-using LoopVectorization, Printf, Base.Threads, Plots, Revise, LinearAlgebra, Statistics, SparseArrays
+using Printf, Base.Threads, Plots, Revise, LinearAlgebra, Statistics, SparseArrays
 ##############
 function SetMarkers!( p, params, domain )    # Use this function to set up the model geometry
     R  = params.user[1]
@@ -9,10 +9,11 @@ function SetMarkers!( p, params, domain )    # Use this function to set up the m
     H  = domain.ymax - domain.ymin
     x1 = -1.0
     x2 =  1.0
-     for k=1:p.nmark #@tturbo <---------rand does not work in @tturbo!!!!
-        layer1     = abs(p.y[k]) < R
-        in         = layer1
-        p.phase[k] = (in==0)* 1.0 + (in==1)*2.0
+    for k=1:p.nmark # <---------rand does not work in !!!!
+        p.phase[k] = 1
+        if abs(p.y[k]) < R
+            p.phase[k] = 2.0
+        end
     end
 end
 ##############
@@ -21,9 +22,9 @@ function Rheology!( f, Eps, Tau, params, materials, BC, ncx, ncy )
     f.etac .= 0.0
     f.Kc   .= 0.0
     for m=1:materials.nphase
-        @tturbo eta    = 2.0* materials.eta0[m] * Eps.II.^(1.0/materials.n[m] - 1.0)
-        @tturbo f.etac .+= f.phase_perc[m,:,:] .* eta
-        @tturbo f.Kc   .+= f.phase_perc[m,:,:] .* materials.K[m]
+        eta    = 2.0* materials.eta0[m] * Eps.II.^(1.0/materials.n[m] - 1.0)
+        f.etac .+= f.phase_perc[m,:,:] .* eta
+        f.Kc   .+= f.phase_perc[m,:,:] .* materials.K[m]
     end
     @time CentroidsToVertices!( f.etav, f.etac, ncx, ncy, BC )
     println("min Eii: ", minimum(Eps.II), " --- max Eii: ", maximum(Eps.II))
@@ -270,6 +271,7 @@ export Rheology!
         # Visualisation
         if params.show_figs==1 && ( mod( it, params.nout )==0 || it==1 )
             p1 = Plots.heatmap( domain.xc, domain.yc, Array(fields.Pc)'./ffs, aspect_ratio=1, xlims=(domain.xmin, domain.xmax), ylims=(domain.ymin, domain.ymax), c=Plots.cgrad(:roma, rev = true), title="P",  clim=(0.0,1.0) )
+            # p1 = Plots.heatmap( domain.xc, domain.yc, Array(fields.etac)'./ffs, aspect_ratio=1, xlims=(domain.xmin, domain.xmax), ylims=(domain.ymin, domain.ymax), c=Plots.cgrad(:roma, rev = true), title="ηc" )
             p2 = Plots.plot( (1:it)*params.dt/tmax, Pnum[1:it], markershape=:dtriangle, label="P num.", legend=:bottomright)
             p2 = Plots.plot!((1:it)*params.dt/tmax, Pana[1:it], markershape=:circle,    label="P ana.")
             display(Plots.plot( p1, p2, dpi=200 ) ); Plots.frame(anim) 

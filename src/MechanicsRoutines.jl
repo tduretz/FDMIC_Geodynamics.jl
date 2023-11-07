@@ -223,8 +223,8 @@ export NumberingStokes!
     DamE =  ones(Float64, size(NumVx)); DamE[1:end-1,:]   .= f.Damc
 
     if BC.periodix==1
-        DamW[  1,:] = Damc[end,:]
-        DamE[end,:] = Damc[1,:]
+        DamW[  1,:] = f.Damc[end,:]
+        DamE[end,:] = f.Damc[1,:]
         etaW[  1,:] = etac[end,:]
         etaE[end,:] = etac[1,:]
         iVxW[  1,:] = NumVx[end-1,:]

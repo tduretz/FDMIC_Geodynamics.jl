@@ -1,7 +1,7 @@
 ##############
 using Revise
 using FDMIC_Geodynamics
-using LoopVectorization, Printf, Base.Threads, Plots, Revise, LinearAlgebra, Statistics, SparseArrays
+using Printf, Base.Threads, Plots, Revise, LinearAlgebra, Statistics, SparseArrays
 ##############
 function SetMarkers!( p::Markers, params::ModelParameters, domain::ModelDomain )    # Use this function to set up the model geometry
     R  = params.user[1]
@@ -9,10 +9,10 @@ function SetMarkers!( p::Markers, params::ModelParameters, domain::ModelDomain )
     H  = domain.ymax - domain.ymin
     x1 = -1.0
     x2 =  1.0
-    for k=1:p.nmark #@tturbo <---------rand does not work in @tturbo!!!!
+    for k=1:p.nmark    
         p.phase[k] = 1.0
     end
-    # for k=1:p.nmark #@tturbo <---------rand does not work in @tturbo!!!!
+    # for k=1:p.nmark  
     #     notch      = ( p.x[k] < 0.0) && (abs(p.y[k] - H/2.0) < R)
     #     in         = notch
     #     p.phase[k] = (in==0)* 1.0 + (in==1)*2.0
@@ -28,12 +28,12 @@ function Rheology!( f, Eps, Tau, params, materials, BC, ncx, ncy )
     # f.GDam .= 0.0
     # f.lDam .= 0.0
     for m=1:materials.nphase
-        @tturbo eta    = materials.G[m]*params.dt
-        @tturbo f.etac .+= f.phase_perc[m,:,:] .* eta           
-        @tturbo f.Kc   .+= f.phase_perc[m,:,:] .* materials.K[m]
-        @tturbo f.Gc   .+= f.phase_perc[m,:,:] .* materials.G[m] 
-        # @tturbo f.GDam .+= f.phase_perc[m,:,:] .* materials.Gc[m] 
-        # @tturbo f.lDam .+= f.phase_perc[m,:,:] .* materials.l0[m]
+        eta    = materials.G[m]*params.dt
+        f.etac .+= f.phase_perc[m,:,:] .* eta           
+        f.Kc   .+= f.phase_perc[m,:,:] .* materials.K[m]
+        f.Gc   .+= f.phase_perc[m,:,:] .* materials.G[m] 
+        #   f.GDam .+= f.phase_perc[m,:,:] .* materials.Gc[m] 
+        #   f.lDam .+= f.phase_perc[m,:,:] .* materials.l0[m]
     end
     @time CentroidsToVertices!( f.etav, f.etac, ncx, ncy, BC )
     @time CentroidsToVertices!( f.Gv,   f.Gc,   ncx, ncy, BC )
@@ -103,9 +103,9 @@ export Rheology!
     materials.G       = zeros(Float64, materials.nphase)
     materials.K       = zeros(Float64, materials.nphase)
     # Constant material parameters (all phases)
-    materials.gDam    = 2.70e3#zeros(Float64, materials.nphase)
-    materials.lDam    = 50.0#zeros(Float64, materials.nphase)
-    materials.eDam    = 1.0e15#zeros(Float64, materials.nphase)
+    materials.gDam    = 2.70e3 #.* ones(Float64, materials.nphase)
+    materials.lDam    = 50.0   #.* ones(Float64, materials.nphase)
+    materials.eDam    = 1.0e15 #.* ones(Float64, materials.nphase)
     # Material 1
     materials.Tref[1] = 1e-1  # reference flow stress
     materials.n[1]    = 1.0

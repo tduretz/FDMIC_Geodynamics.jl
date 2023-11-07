@@ -96,7 +96,7 @@ export FindClosestNeighbour
     mlist       = Array{Array{Int64}}(undef,ncx,ncy)
     mlist_th    = Array{Array{Int64}}(undef,nthreads(),ncx,ncy)
 
-    @tturbo for i=1:ncx
+    for i=1:ncx
         for j=1:ncy
             mlist[i,j] = zeros(Int64(mpc[i,j]))
         end
@@ -532,7 +532,7 @@ export CountMarkers3!
     mlist       = Array{Array{Int64}}(undef,ncx,ncy)
     mlist_th    = Array{Array{Int64}}(undef,nthreads(),ncx,ncy)
 
-    @tturbo for i=1:ncx
+    for i=1:ncx
         for j=1:ncy
             mlist[i,j] = zeros(Int64(mpc[i,j]))
         end

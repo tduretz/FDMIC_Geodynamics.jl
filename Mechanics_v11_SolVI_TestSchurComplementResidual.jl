@@ -4,6 +4,142 @@ using FDMIC_Geodynamics
 using Printf, Base.Threads, Plots, Revise, LinearAlgebra, Statistics, SparseArrays
 include("./src/EvalAnalDani_v2.jl")
 ##############
+function Residual_Stokes_SchurComplement!( Fx, Fy, Vx, Vy, p, γ, bcv, BC )
+    Δx=p.Δx; Δy=p.Δy; BCx=p.BCx; BCy=p.BCy; ηv=p.ηv; ηc=p.ηc; ncx=p.ncx; ncy=p.ncy; bx=p.bx; by=p.by; bp=p.bp; nvx=ncx+1; nvy=ncy+1
+    
+    for j=1:ncy, i=2:nvx-1
+        if j==1
+            VxS = bcv*2*BC.Vx.Dir_S[i] - Vx[i,j]
+        else
+            VxS = Vx[i,j-1]
+        end
+        if j==ncy  
+            VxN = bcv*2*BC.Vx.Dir_N[i] - Vx[i,j] 
+        else
+            VxN = Vx[i,j+1] 
+        end
+        ∂Vx∂xW  = (Vx[i,j]   - Vx[i-1,j]) / Δx
+        ∂Vx∂xE  = (Vx[i+1,j] - Vx[i,j]  ) / Δx
+        ∂Vy∂yW  = (Vy[i-1,j+1] - Vy[i-1,j]) / Δy
+        ∂Vy∂yE  = (Vy[i,j+1]   - Vy[i,j]  ) / Δy
+        ∂Vx∂yS  = (Vx[i,j] - VxS) / Δy
+        ∂Vx∂yN  = (VxN - Vx[i,j]) / Δy
+        ∂Vy∂xS  = (Vy[i,j]   - Vy[i-1,j]) / Δx
+        ∂Vy∂xN  = (Vy[i,j+1] - Vy[i-1,j+1]) / Δx
+        ∇vW     = ∂Vx∂xW + ∂Vy∂yW
+        ∇vE     = ∂Vx∂xE + ∂Vy∂yE
+        εxxW    = ∂Vx∂xW - 1//3*∇vW
+        εxxE    = ∂Vx∂xE - 1//3*∇vE
+        εyxS    = 0.5*(∂Vx∂yS + ∂Vy∂xS)
+        εyxN    = 0.5*(∂Vx∂yN + ∂Vy∂xN)
+        τxxW    = 2.0*ηc[i-1,j]*εxxW + γ*∇vW
+        τxxE    = 2.0*ηc[i  ,j]*εxxE + γ*∇vE
+        τyxS    = 2.0*ηv[i,j]*εyxS
+        τyxN    = 2.0*ηv[i,j+1]*εyxN
+        Fx[i,j] = (τxxE - τxxW)/Δx + (τyxN - τyxS)/Δy + bx[i,j]
+    end
+
+    for j=2:nvy-1, i=1:ncx # avoid Dirichlets
+        if i==1
+            VyW = bcv*2*BC.Vy.Dir_W[j] - Vy[i,j]
+        else
+            VyW = Vy[i-1,j]
+        end
+        if i==ncx  
+            VyE = bcv*2*BC.Vy.Dir_E[j] - Vy[i,j] 
+        else
+            VyE = Vy[i+1,j] 
+        end
+        ∂Vx∂xS  = (Vx[i+1,j-1] - Vx[i,j-1]) / Δx
+        ∂Vx∂xN  = (Vx[i+1,j-0] - Vx[i,j-0]) / Δx
+        ∂Vy∂yS  = (Vy[i,j]   - Vy[i,j-1]) / Δy
+        ∂Vy∂yN  = (Vy[i,j+1] - Vy[i,j]  ) / Δy
+        ∂Vx∂yW  = (Vx[i,j]   - Vx[i,j-1]  ) / Δy
+        ∂Vx∂yE  = (Vx[i+1,j] - Vx[i+1,j-1]) / Δy
+        ∂Vy∂xW  = (Vy[i,j]   - VyW) / Δx
+        ∂Vy∂xE  = (VyE - Vy[i,j]  ) / Δx
+        ∇vS     = ∂Vx∂xS + ∂Vy∂yS
+        ∇vN     = ∂Vx∂xN + ∂Vy∂yN
+        εyyS    = ∂Vy∂yS - 1//3*∇vS
+        εyyN    = ∂Vy∂yN - 1//3*∇vN
+        εxyW    = 0.5*(∂Vy∂xW + ∂Vx∂yW) 
+        εxyE    = 0.5*(∂Vy∂xE + ∂Vx∂yE)
+        τyyS    = 2.0*ηc[i,j-1]*εyyS + γ*∇vS
+        τyyN    = 2.0*ηc[i,j]*εyyN + γ*∇vN
+        τxyW    = 2.0*ηv[i,j]*εxyW
+        τxyE    = 2.0*ηv[i+1,j]*εxyE
+        Fy[i,j] = (τyyN - τyyS)/Δy + (τxyE - τxyW)/Δx + by[i,j]
+    end
+end
+##############
+function Residual_Stokes!( Fx, Fy, Fp, Vx, Vy, P, p, γ, bcv, BC )
+    Δx=p.Δx; Δy=p.Δy; BCx=p.BCx; BCy=p.BCy; ηv=p.ηv; ηc=p.ηc; ncx=p.ncx; ncy=p.ncy; bx=p.bx; by=p.by; bp=p.bp; nvx=ncx+1; nvy=ncy+1
+    
+    for j=1:ncy, i=2:nvx-1
+        if j==1
+            VxS = 2*BC.Vx.Dir_S[i] - Vx[i,j]
+        else
+            VxS = Vx[i,j-1]
+        end
+        if j==ncy  
+            VxN = 2*BC.Vx.Dir_N[i] - Vx[i,j] 
+        else
+            VxN = Vx[i,j+1] 
+        end
+        ∂Vx∂xW  = (Vx[i,j]   - Vx[i-1,j]) / Δx
+        ∂Vx∂xE  = (Vx[i+1,j] - Vx[i,j]  ) / Δx
+        ∂Vy∂yW  = (Vy[i-1,j+1] - Vy[i-1,j]) / Δy
+        ∂Vy∂yE  = (Vy[i,j+1]   - Vy[i,j]  ) / Δy
+        ∂Vx∂yS  = (Vx[i,j] - VxS) / Δy
+        ∂Vx∂yN  = (VxN - Vx[i,j]) / Δy
+        ∂Vy∂xS  = (Vy[i,j]   - Vy[i-1,j]) / Δx
+        ∂Vy∂xN  = (Vy[i,j+1] - Vy[i-1,j+1]) / Δx
+        ∇vW     = ∂Vx∂xW + ∂Vy∂yW
+        ∇vE     = ∂Vx∂xE + ∂Vy∂yE
+        εxxW    = ∂Vx∂xW - 1//3*∇vW
+        εxxE    = ∂Vx∂xE - 1//3*∇vE
+        εyxS    = 0.5*(∂Vx∂yS + ∂Vy∂xS)
+        εyxN    = 0.5*(∂Vx∂yN + ∂Vy∂xN)
+        τxxW    = 2.0*ηc[i-1,j]*εxxW 
+        τxxE    = 2.0*ηc[i  ,j]*εxxE 
+        τyxS    = 2.0*ηv[i,j]*εyxS
+        τyxN    = 2.0*ηv[i,j+1]*εyxN
+        Fx[i,j] = (τxxE - τxxW)/Δx + (τyxN - τyxS)/Δy - (P[i,j] - P[i-1,j])/Δx
+    end
+
+    for j=2:nvy-1, i=1:ncx # avoid Dirichlets
+        if i==1
+            VyW = 2*BC.Vy.Dir_W[j] - Vy[i,j]
+        else
+            VyW = Vy[i-1,j]
+        end
+        if i==ncx  
+            VyE = 2*BC.Vy.Dir_E[j] - Vy[i,j] 
+        else
+            VyE = Vy[i+1,j] 
+        end
+        ∂Vx∂xS  = (Vx[i+1,j-1] - Vx[i,j-1]) / Δx
+        ∂Vx∂xN  = (Vx[i+1,j-0] - Vx[i,j-0]) / Δx
+        ∂Vy∂yS  = (Vy[i,j]   - Vy[i,j-1]) / Δy
+        ∂Vy∂yN  = (Vy[i,j+1] - Vy[i,j]  ) / Δy
+        ∂Vx∂yW  = (Vx[i,j]   - Vx[i,j-1]  ) / Δy
+        ∂Vx∂yE  = (Vx[i+1,j] - Vx[i+1,j-1]) / Δy
+        ∂Vy∂xW  = (Vy[i,j]   - VyW) / Δx
+        ∂Vy∂xE  = (VyE - Vy[i,j]  ) / Δx
+        ∇vS     = ∂Vx∂xS + ∂Vy∂yS
+        ∇vN     = ∂Vx∂xN + ∂Vy∂yN
+        εyyS    = ∂Vy∂yS - 1//3*∇vS
+        εyyN    = ∂Vy∂yN - 1//3*∇vN
+        εxyW    = 0.5*(∂Vy∂xW + ∂Vx∂yW) 
+        εxyE    = 0.5*(∂Vy∂xE + ∂Vx∂yE)
+        τyyS    = 2.0*ηc[i,j-1]*εyyS 
+        τyyN    = 2.0*ηc[i,j]*εyyN 
+        τxyW    = 2.0*ηv[i,j]*εxyW
+        τxyE    = 2.0*ηv[i+1,j]*εxyE
+        Fy[i,j] = (τyyN - τyyS)/Δy + (τxyE - τxyW)/Δx - (P[i,j] - P[i,j-1])/Δy 
+    end
+end
+##############
 function SetMarkers!( p::Markers, params::ModelParameters, dom::ModelDomain )
     R = params.user[1]
     # Use this function to set up the model geometry
@@ -26,7 +162,7 @@ function Rheology!( f, Eps, Tau, params, materials, BC, ncx, ncy )
 end
 export Rheology!
 ##############
-@views function main( N )
+function main( N )
     # Main routine 
     println("#####################")
     println("###### M2Di.jl ######")
@@ -63,12 +199,12 @@ export Rheology!
     params.comp      = 0     # Compressible
     # Solver
     #------------------------ PINNED PRESSURE
-    params.solver    =-1     # -1: coupled with pinned P, 0: coupled with slight compressibility --- 1: decoupled Powell-Hestenes --- 2: decoupled KSP GCR
+    params.solver    = 1     # 1: coupled with pinned P, 0: coupled with slight compressibility --- 1: decoupled Powell-Hestenes --- 2: decoupled KSP GCR
     #------------------------ PINNED PRESSURE
     params.gamma     = 1e4   # Penalty factor
     params.Dir_scale = 1.0   # Dirichlet scaling factor
     # Non-linear iterations 
-    params.niter_nl  = 5     # max. number of non-linear iterations
+    params.niter_nl  = 1     # max. number of non-linear iterations
     params.tol_nl    = 1e-7  # non-linear tolerance
     params.JFNK      = 0     # Jacobian-Free Newton_Krylov
     # Visualisation
@@ -204,6 +340,15 @@ export Rheology!
     end
     # Set pinned pressure
     fields.Pc[1,1] = Pca[1,1]
+
+    Fx = zeros(ncx+1,ncy)
+    Fy = zeros(ncx,ncy+1)
+    Fp = zeros(ncx,ncy)
+    Vx = zeros(ncx+1,ncy)
+    Vy = zeros(ncx,ncy+1)
+    bx = zeros(ncx+1,ncy)
+    by = zeros(ncx,ncy+1)
+
     #------------------------ PINNED PRESSURE
     # TIME LOOP
     for it=1:params.nt
@@ -229,6 +374,7 @@ export Rheology!
         # Number equations
         println("Numbering")
         @time NumberingStokes!( fields, BC, domain )
+        
         # Non-linear iterations
         for iter=1:params.niter_nl
 
@@ -256,7 +402,88 @@ export Rheology!
             @time Kuu, Kup, Kpu = StokesAssembly( BC, fields, params.Dir_scale, domain )
             # Call solver
             println("Solver")
-            @time StokesSolver!( fields, params, domain, materials, BC, Kuu, Kup, Kpu )
+            #-------------------------------------------------
+            # @time StokesSolver!( fields, params, domain, materials, BC, Kuu, Kup, Kpu )
+            
+
+            fu = zeros(Float64, length(fields.Fx) + length(fields.Fy))
+            fp = zeros(Float64, length(fields.Fp))
+            fu[1:length(fields.Fx)]     .= fields.Fx[:]
+            fu[length(fields.Fx)+1:end] .= fields.Fy[:]
+            fp .= fields.Fp[:]
+
+            # Decoupled solve
+            ndofu = size(Kup,1)
+            ndofp = size(Kup,2)
+            if params.comp==1
+                coef      = 1.0./(f.Kc[:].*params.dt).*ones(length(f.etac))#.*etac[:]
+                coef_inv  = f.Kc[:].*params.dt.*ones(length(f.etac))#.*etac[:]
+            else
+                coef      =    0.0*ones(length(fields.etac))#.*etac[:]
+                coef_inv  = params.gamma*ones(length(fields.etac))#.*etac[:]
+            end
+            Kpp   = spdiagm(coef)
+            Kppi  = spdiagm(coef_inv)
+            Kuusc = Kuu - Kup*(Kppi*Kpu) # OK
+            
+            println()
+            show(stdout, "text/plain", Kuu[45,:])
+            println() 
+            show(stdout, "text/plain", Kuusc[45,:])
+            # show(stdout, "text/plain", Kuusc[44,:])
+            # show(stdout, "text/plain", Kuusc[45,:])
+            
+            PC    =  0.5*(Kuusc + Kuusc') 
+            t = @elapsed Kf    = cholesky(Hermitian(PC), check = false)
+            @printf("Cholesky took = %02.2e s\n", t)
+            u     = zeros(Float64,ndofu)
+            ru    = zeros(Float64,ndofu)
+            fusc  = zeros(Float64,ndofu)
+            p     = zeros(Float64,ndofp)
+            rp    = zeros(Float64,ndofp)
+            # Iterations
+            for rit=1:10
+                ru   .= fu .- Kuu*u .- Kup*p;
+                rp   .= fp .- Kpu*u .- Kpp*p;
+                @printf("  --> Powell-Hestenes Iteration %02d\n  Momentum res.   = %2.2e\n  Continuity res. = %2.2e\n", rit, norm(ru)/sqrt(length(ru)), norm(rp)/sqrt(length(rp)))
+                if norm(ru)/(length(ru)) < 1e-13 && norm(rp)/(length(ru)) < 1e-13
+                    break
+                end
+                fusc .=  fu .- Kup*(Kppi*fp .+ p)
+                u    .= Kf\fusc
+                p   .+= Kppi*(fp .- Kpu*u .- Kpp*p)
+
+                # Residual
+                # f = fusc .- Kuusc*u
+                # Fx .= f[fields.NumVx]
+                # Fy .= f[fields.NumVy]
+
+                Rx = fu[fields.NumVx]
+                Ry = fu[fields.NumVy]
+                Rp = fp[fields.NumP]
+
+                # Matrix free Schur-complement RHS
+                p_dum = p[fields.NumP] .+ params.gamma.*Rp
+                bx[2:end-1,:] .= Rx[2:end-1,:] .- diff(p_dum,dims=1) ./ dx  
+                by[:,2:end-1] .= Ry[:,2:end-1] .- diff(p_dum,dims=2) ./ dy 
+
+                # Matrix free Schur-complement residual: 🎫
+                # bx = fusc[fields.NumVx]
+                # by = fusc[fields.NumVy]
+                Vx.= u[fields.NumVx]
+                Vy.= u[fields.NumVy]
+                bp = zeros(ncx,ncy)
+                pm = (Δx=dx, Δy=dy, BCx=0, BCy=0, ηv=fields.etav, ηc=fields.etac, ncx=ncx, ncy=ncy, bx=bx, by=by, bp=bp )
+                Residual_Stokes_SchurComplement!( Fx, Fy, Vx, Vy, pm, params.gamma, 0.0, BC )
+
+                dP = params.gamma.*(Rp .- (diff(Vx,dims=1) ./ dx + diff(Vy,dims=2) ./ dy))
+                p .+= dP[:]
+            end
+            fields.Vx[:,2:end-1] .= fields.Vx[:,2:end-1] .+ u[fields.NumVx]
+            fields.Vy[2:end-1,:] .= fields.Vy[2:end-1,:] .+ u[fields.NumVy]
+            fields.Pc            .= fields.Pc            .+ p[fields.NumP]
+            
+            #-------------------------------------------------
         
             # Evaluate residuals
             println("Residuals")
@@ -285,11 +512,23 @@ export Rheology!
     errV  = sqrt.((Vxc .- Vxca).^2 .+ (Vyc .- Vyca).^2) #.- sqrt.(Vxca.^2 .+ Vyca.^2)
     errP  = abs.(fields.Pc.-Pca)
     println("L1 error V :", mean(errV))
-    println("L1 error P :", mean(errP ))
+    println("L1 error P :", mean(errP))
     # Visualize
     if params.show_figs==1
-        p1 = Plots.heatmap(domain.xc, domain.yc, Array(Vxc .- Vxca)', aspect_ratio=1, xlims=(domain.xmin, domain.xmax), ylims=(domain.ymin, domain.ymax), c=Plots.cgrad(:roma, rev = true), title="Vx")
-        p2 = Plots.heatmap(domain.xc, domain.yc, Array(Vyc .- Vyca)', aspect_ratio=1, xlims=(domain.xmin, domain.xmax), ylims=(domain.ymin, domain.ymax), c=Plots.cgrad(:roma, rev = true), title="Vy")
+
+        # display(fields.NumVx')
+
+        # bx = zeros(ncx+1,ncy)
+        # by = zeros(ncx,ncy+1)
+        # bp = zeros(ncx,ncy)
+        # pm = (Δx=dx, Δy=dy, BCx=0, BCy=0, ηv=fields.etav, ηc=fields.etac, ncx=ncx, ncy=ncy, bx=bx, by=by, bp=bp )
+        # Residual_Stokes!( Fx, Fy, Fp, fields.Vx[:,2:end-1], fields.Vy[2:end-1,:], fields.Pc, pm, params.gamma, 1.0, BC )
+
+
+        p1 = Plots.heatmap(domain.xv, domain.yc, Array(Fx)', aspect_ratio=1, xlims=(domain.xmin, domain.xmax), ylims=(domain.ymin, domain.ymax), c=Plots.cgrad(:roma, rev = true), title="Fx")
+        p2 = Plots.heatmap(domain.xc, domain.yv, Array(Fy)', aspect_ratio=1, xlims=(domain.xmin, domain.xmax), ylims=(domain.ymin, domain.ymax), c=Plots.cgrad(:roma, rev = true), title="Fy")
+        # p1 = Plots.heatmap(domain.xc, domain.yc, Array(Vxc .- Vxca)', aspect_ratio=1, xlims=(domain.xmin, domain.xmax), ylims=(domain.ymin, domain.ymax), c=Plots.cgrad(:roma, rev = true), title="Vx")
+        # p2 = Plots.heatmap(domain.xc, domain.yc, Array(Vyc .- Vyca)', aspect_ratio=1, xlims=(domain.xmin, domain.xmax), ylims=(domain.ymin, domain.ymax), c=Plots.cgrad(:roma, rev = true), title="Vy")
         p3 = Plots.heatmap(domain.xc, domain.yc, Array(errP)',        aspect_ratio=1, xlims=(domain.xmin, domain.xmax), ylims=(domain.ymin, domain.ymax), c=Plots.cgrad(:roma, rev = true), title="P")
         p4 = Plots.heatmap(domain.xv, domain.yv, Array(fields.etav)', aspect_ratio=1, xlims=(domain.xmin, domain.xmax), ylims=(domain.ymin, domain.ymax), c=Plots.cgrad(:roma, rev = true), title="etav")
         display(Plots.plot( p1, p2, p3, p4, dpi=200 ) ) 
@@ -300,19 +539,8 @@ end
 ####################################################
 ####################################################
 ####################################################
-N        = [50; 100; 200; 400;]
-L1_errV  = zeros(length(N))
-L1_errP  = zeros(length(N))
-h        = 2.0 ./ N
+N        = [20;]
 # Call solver
-for ires=1:length(N)
+for ires in eachindex(N)
     @time eV, eP = main( N[ires] )
-    L1_errV[ires]     = eV
-    L1_errP[ires]     = eP
 end
-# Visualise
-p = Plots.plot(  log10.(1.0./h),  log10.(L1_errV), markershape=:rect, color=:blue, label="V", xlabel="1/h" )
-p = Plots.plot!( log10.(1.0./h),  log10.(L1_errP), markershape=:rect, color=:red,  label="P", ylabel="L1 error" )
-display( p )
-display(L1_errV[1:end-1]./L1_errV[2:end-0])
-display(L1_errP[1:end-1]./L1_errP[2:end-0])

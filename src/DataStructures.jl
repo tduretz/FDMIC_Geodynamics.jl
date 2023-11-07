@@ -104,8 +104,8 @@ export MaterialParameters
 Base.@kwdef mutable struct ModelParameters 
     # User interface
     user          = zeros(Float64, 10) 
-    gx            :: Union{Float64, Missing}   = missing
-    gy            :: Union{Float64, Missing}   = missing
+    gx            :: Union{Float64, Missing}   = 0.0
+    gy            :: Union{Float64, Missing}   = 0.0
     # Switches
     BC_type       :: Union{Int64, Missing}     = missing    # 1: Pure shear / 2: Simple shear / 3: Simple shear periodic
     comp          :: Union{Int64, Missing}     = missing    # Compressible

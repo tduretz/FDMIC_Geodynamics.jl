@@ -69,7 +69,7 @@ function DamageResidual!( f::Fields2D, Th_BC::Thermal_BC, dom::ModelDomain, mat:
     Tex[2:end-1,  1]     .=                                 (Th_BC.type_S==2) * T[:,  1] .+ (Th_BC.type_S==1) * (2.0*Th_BC.Dir_S[:] - T[:,  1])
     Tex[2:end-1,end]     .=                                 (Th_BC.type_N==2) * T[:,end] .+ (Th_BC.type_N==1) * (2.0*Th_BC.Dir_N[:] - T[:,end])
     # Compute residual
-    @tturbo for i = 1:ncx  
+    for i = 1:ncx  
         for j = 1:ncy
             pinned = Th_BC.Pinned[i,j]==1
             qW = (Tex[i+1,j+1] - Tex[i+0,j+1])/dx
@@ -158,14 +158,19 @@ function InitialDamageResidual!( f::Fields2D, Th_BC::Thermal_BC, dom::ModelDomai
     Tex[2:end-1,  1]     .=                                 (Th_BC.type_S==2) * T[:,  1] .+ (Th_BC.type_S==1) * (2.0*Th_BC.Dir_S[:] - T[:,  1])
     Tex[2:end-1,end]     .=                                 (Th_BC.type_N==2) * T[:,end] .+ (Th_BC.type_N==1) * (2.0*Th_BC.Dir_N[:] - T[:,end])
     # Compute residual
-    @tturbo for i = 1:ncx  
+    for i = 1:ncx  
         for j = 1:ncy
             pinned = Th_BC.Pinned[i,j]==1
             qW = (Tex[i+1,j+1] - Tex[i+0,j+1])/dx
             qE = (Tex[i+2,j+1] - Tex[i+1,j+1])/dx
             qS = (Tex[i+1,j+1] - Tex[i+1,j+0])/dy
             qN = (Tex[i+1,j+2] - Tex[i+1,j+1])/dy
-            f.FDam[i,j] = (pinned==0) * ( f.phiDam[i,j] / mat.lDam[i,j]^2 - ( (qE-qW)/dx + (qN-qS)/dy ) ) + (pinned==1) * 0.0
+            if pinned==1
+                f.FDam[i,j] = 0.0
+            else
+                f.FDam[i,j] = f.phiDam[i,j] / mat.lDam^2 - ( (qE-qW)/dx + (qN-qS)/dy ) 
+                # f.FDam[i,j] = f.phiDam[i,j] / mat.lDam[i,j]^2 - ( (qE-qW)/dx + (qN-qS)/dy ) 
+            end
         end
     end
 end

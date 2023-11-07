@@ -1,7 +1,7 @@
 ##############
 using Revise
 using FDMIC_Geodynamics
-using LoopVectorization, Printf, Base.Threads, Plots, Revise, LinearAlgebra, Statistics, SparseArrays
+using Printf, Base.Threads, Plots, Revise, LinearAlgebra, Statistics, SparseArrays
 include("./src/SolKz.jl")
 ##############
 function SetMarkers!( p::Markers, params::ModelParameters, dom::ModelDomain )

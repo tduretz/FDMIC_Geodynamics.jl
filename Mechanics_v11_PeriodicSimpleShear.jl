@@ -1,12 +1,12 @@
 ##############
 using Revise
 using FDMIC_Geodynamics
-using LoopVectorization, Printf, Base.Threads, Plots, Revise, LinearAlgebra, Statistics, SparseArrays
+using Printf, Base.Threads, Plots, Revise, LinearAlgebra, Statistics, SparseArrays
 ##############
 function SetMarkers!( p::Markers, params::ModelParameters, dom::ModelDomain )
     R = params.user[1]
     # Use this function to set up the model geometry
-     for k=1:p.nmark #@tturbo <---------rand does not work in @tturbo!!!!
+     for k=1:p.nmark 
         in         = ( ( (p.x[k])^2 + p.y[k]^2) < R^2 )
         p.phase[k] = (in==0)* 1.0 + (in==1)*2.0
     end
